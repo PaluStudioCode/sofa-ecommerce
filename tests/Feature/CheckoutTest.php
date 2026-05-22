@@ -6,7 +6,7 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
@@ -27,7 +27,7 @@ class CheckoutTest extends TestCase
             ->assertRedirect(route('cart.index'));
     }
 
-    public function test_checkout_page_shows_cart_items_and_safe_google_maps_config(): void
+    public function test_checkout_page_shows_cart_items_without_map_api_credentials(): void
     {
         $customer = User::factory()->create();
         [$product, $variant] = $this->activeProductAndVariant(price: 2500000, stock: 4);
@@ -47,11 +47,11 @@ class CheckoutTest extends TestCase
                 ->where('items.0.product_name', $product->name)
                 ->where('summary.subtotal', 5000000)
                 ->where('summary.can_submit', false)
-                ->has('googleMaps.apiKey')
+                ->missing('googleMaps')
             );
     }
 
-    public function test_checkout_quote_applies_voucher_and_highest_priority_shipping_area(): void
+    public function test_checkout_quote_applies_voucher_and_highest_priority_store_radius(): void
     {
         $customer = User::factory()->create();
         [$product, $variant] = $this->activeProductAndVariant(price: 2000000, stock: 5);
@@ -62,19 +62,19 @@ class CheckoutTest extends TestCase
             'quantity' => 2,
         ]);
 
-        ShippingArea::factory()->create([
-            'name' => 'Area Prioritas Rendah',
-            'center_latitude' => -6.2,
-            'center_longitude' => 106.816666,
+        Store::factory()->create([
+            'name' => 'Toko Prioritas Rendah',
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 150000,
             'priority' => 1,
             'is_active' => true,
         ]);
-        ShippingArea::factory()->create([
-            'name' => 'Area Prioritas Tinggi',
-            'center_latitude' => -6.2,
-            'center_longitude' => 106.816666,
+        Store::factory()->create([
+            'name' => 'Toko Prioritas Tinggi',
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 75000,
             'priority' => 9,
@@ -93,7 +93,7 @@ class CheckoutTest extends TestCase
         ]);
 
         $this->actingAs($customer)
-            ->post(route('checkout.location'), ['place_id' => 'fake-place'])
+            ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
 
         $this->actingAs($customer)
@@ -109,7 +109,7 @@ class CheckoutTest extends TestCase
                 ->where('summary.discount_amount', 250000)
                 ->where('summary.shipping_cost', 75000)
                 ->where('summary.total', 3825000)
-                ->where('summary.shipping_area.name', 'Area Prioritas Tinggi')
+                ->where('summary.store.name', 'Toko Prioritas Tinggi')
                 ->where('summary.voucher.code', 'HEMAT250')
                 ->where('summary.can_submit', true)
             );
@@ -126,9 +126,9 @@ class CheckoutTest extends TestCase
             'quantity' => 2,
         ]);
 
-        ShippingArea::factory()->create([
-            'center_latitude' => -6.2,
-            'center_longitude' => 106.816666,
+        Store::factory()->create([
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
             'priority' => 3,
@@ -146,7 +146,7 @@ class CheckoutTest extends TestCase
         ]);
 
         $this->actingAs($customer)
-            ->post(route('checkout.location'), ['place_id' => 'fake-place'])
+            ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
         $this->actingAs($customer)
             ->post(route('checkout.quote'), ['voucher_code' => 'SOFA300'])
@@ -204,9 +204,9 @@ class CheckoutTest extends TestCase
             'quantity' => 2,
         ]);
 
-        ShippingArea::factory()->create([
-            'center_latitude' => -7.5,
-            'center_longitude' => 110.0,
+        Store::factory()->create([
+            'latitude' => -7.5,
+            'longitude' => 110.0,
             'radius_km' => 1,
             'shipping_cost' => 100000,
             'priority' => 1,
@@ -214,17 +214,17 @@ class CheckoutTest extends TestCase
         ]);
 
         $this->actingAs($customer)
-            ->post(route('checkout.location'), ['place_id' => 'fake-place'])
+            ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
 
         $this->actingAs($customer)
             ->post(route('checkout.quote'), ['voucher_code' => 'TIDAKADA'])
             ->assertSessionHasErrors('location');
 
-        ShippingArea::query()->delete();
-        ShippingArea::factory()->create([
-            'center_latitude' => -6.2,
-            'center_longitude' => 106.816666,
+        Store::query()->delete();
+        Store::factory()->create([
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
             'priority' => 1,
@@ -250,6 +250,19 @@ class CheckoutTest extends TestCase
                 'shipping_note' => null,
             ])
             ->assertSessionHasErrors('cart');
+    }
+
+    private function locationPayload(array $overrides = []): array
+    {
+        return [
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
+            'formatted_address' => 'Jl. Contoh Sofa No. 1, Jakarta, Indonesia',
+            'city' => 'Jakarta',
+            'district' => 'Gambir',
+            'postal_code' => '10110',
+            ...$overrides,
+        ];
     }
 
     private function activeProductAndVariant(int $price, int $stock, int $reserved = 0): array

@@ -6,14 +6,17 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ProductVariant;
 use App\Services\Midtrans\MidtransPaymentGateway;
+use App\Services\Notifications\WhatsAppNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PaymentAttemptService
 {
-    public function __construct(private readonly MidtransPaymentGateway $gateway)
-    {
+    public function __construct(
+        private readonly MidtransPaymentGateway $gateway,
+        private readonly WhatsAppNotificationService $notifications,
+    ) {
     }
 
     public function createAttempt(Order $order): Payment
@@ -156,6 +159,7 @@ class PaymentAttemptService
 
             if ($mappedStatus === 'success') {
                 $this->settleOrder($order);
+                $this->notifications->sendOrderEvent($order->fresh(), 'payment_success');
 
                 return $lockedPayment->fresh();
             }
@@ -282,10 +286,9 @@ class PaymentAttemptService
                 'phone' => $order->customer_phone,
             ],
             'item_details' => $this->itemDetails($order),
-            'callbacks' => array_filter([
-                'finish' => route('checkout.index', ['order' => $order->id]),
-                'notification' => $this->gateway->callbackUrl(),
-            ]),
+            'callbacks' => [
+                'finish' => route('checkout.index', ['order' => $order->id, 'payment_return' => 1]),
+            ],
         ];
     }
 

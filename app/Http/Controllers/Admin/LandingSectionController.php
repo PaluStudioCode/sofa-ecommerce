@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\LandingSectionRequest;
 use App\Models\LandingSection;
+use App\Support\MediaUrl;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -82,7 +82,7 @@ class LandingSectionController extends Controller
 
         if ($request->hasFile('image')) {
             if ($landingSection->image_path) {
-                Storage::disk('public')->delete($landingSection->image_path);
+                MediaUrl::deleteLocal($landingSection->image_path);
             }
 
             $data['image_path'] = $request->file('image')->store('landing', 'public');
@@ -98,7 +98,7 @@ class LandingSectionController extends Controller
     public function destroy(LandingSection $landingSection): RedirectResponse
     {
         if ($landingSection->image_path) {
-            Storage::disk('public')->delete($landingSection->image_path);
+            MediaUrl::deleteLocal($landingSection->image_path);
         }
 
         $landingSection->delete();
@@ -115,7 +115,7 @@ class LandingSectionController extends Controller
             'subtitle' => $section->subtitle,
             'content' => $section->content,
             'image_path' => $section->image_path,
-            'image_url' => $section->image_path ? asset('storage/'.$section->image_path) : null,
+            'image_url' => MediaUrl::fromPath($section->image_path),
             'button_label' => $section->button_label,
             'button_url' => $section->button_url,
             'sort_order' => $section->sort_order,

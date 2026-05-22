@@ -39,9 +39,14 @@ class Order extends Model
         return $this->belongsTo(Voucher::class);
     }
 
+    public function store(): BelongsTo
+    {
+        return $this->belongsTo(Store::class);
+    }
+
     public function shippingArea(): BelongsTo
     {
-        return $this->belongsTo(ShippingArea::class);
+        return $this->belongsTo(Store::class, 'store_id');
     }
 
     public function items(): HasMany

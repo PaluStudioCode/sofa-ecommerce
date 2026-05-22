@@ -45,7 +45,10 @@ class ProductVariantController extends Controller
 
     public function store(ProductVariantRequest $request): RedirectResponse
     {
-        ProductVariant::create($request->validated());
+        ProductVariant::create([
+            ...$request->validated(),
+            'reserved_stock' => 0,
+        ]);
 
         return back()->with('success', 'Varian disimpan.');
     }

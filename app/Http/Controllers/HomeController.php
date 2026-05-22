@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\LandingSection;
 use App\Models\Product;
 use App\Models\Voucher;
+use App\Services\Vouchers\VoucherStatusService;
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class HomeController extends Controller
 {
-    public function __invoke(): Response
+    public function __invoke(VoucherStatusService $voucherStatuses): Response
     {
+        $voucherStatuses->syncAll();
+
         $sections = LandingSection::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -23,7 +27,7 @@ class HomeController extends Controller
                 'title' => $section->title,
                 'subtitle' => $section->subtitle,
                 'content' => $section->content,
-                'image_url' => $section->image_path ? asset('storage/'.$section->image_path) : null,
+                'image_url' => MediaUrl::fromPath($section->image_path),
                 'button_label' => $section->button_label,
                 'button_url' => $section->button_url,
                 'sort_order' => $section->sort_order,
@@ -72,7 +76,7 @@ class HomeController extends Controller
             'name' => $product->name,
             'slug' => $product->slug,
             'category' => $product->category?->name,
-            'image_url' => $product->primaryImage?->file_path ? asset('storage/'.$product->primaryImage->file_path) : null,
+            'image_url' => MediaUrl::fromPath($product->primaryImage?->file_path),
             'min_price' => (float) $activeVariants->min('price'),
             'max_price' => (float) $activeVariants->max('price'),
             'available' => $activeVariants->sum(fn ($variant) => max(0, $variant->stock - $variant->reserved_stock)) > 0,

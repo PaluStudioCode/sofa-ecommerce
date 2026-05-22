@@ -12,7 +12,7 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Shipment;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
@@ -103,8 +103,9 @@ class DatabaseSeeder extends Seeder
 
         ProductImage::updateOrCreate([
             'product_id' => $featuredProduct->id,
-            'file_path' => 'products/sofa-luna-main.jpg',
+            'is_primary' => true,
         ], [
+            'file_path' => 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80',
             'product_variant_id' => null,
             'alt_text' => 'Sofa Luna 3 Seater',
             'sort_order' => 0,
@@ -141,10 +142,10 @@ class DatabaseSeeder extends Seeder
             'status' => 'kedaluwarsa',
         ]);
 
-        $shippingArea = ShippingArea::updateOrCreate(['name' => 'Jakarta Pusat Radius Demo'], [
-            'description' => 'Area ongkir radius aktif untuk demo checkout.',
-            'center_latitude' => -6.20000000,
-            'center_longitude' => 106.81666600,
+        $store = Store::updateOrCreate(['name' => 'Toko Jakarta Pusat Demo'], [
+            'description' => 'Titik toko dan radius layanan aktif untuk demo checkout.',
+            'latitude' => -6.20000000,
+            'longitude' => 106.81666600,
             'radius_km' => 15,
             'shipping_cost' => 150000,
             'priority' => 10,
@@ -155,7 +156,7 @@ class DatabaseSeeder extends Seeder
             'title' => 'Sofa nyaman untuk rumah yang hidup',
             'subtitle' => 'Koleksi sofa pilihan dengan pengiriman internal toko.',
             'content' => 'Pilih sofa, checkout, bayar online, lalu tunggu jadwal pengiriman dari tim kami.',
-            'image_path' => 'landing/hero-sofa.jpg',
+            'image_path' => 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1600&q=80',
             'button_label' => 'Lihat Katalog',
             'button_url' => '/catalog',
             'sort_order' => 0,
@@ -165,7 +166,7 @@ class DatabaseSeeder extends Seeder
         $order = Order::updateOrCreate(['order_number' => 'ORD-DEMO-0001'], [
             'user_id' => $customer->id,
             'voucher_id' => $activeVoucher->id,
-            'shipping_area_id' => $shippingArea->id,
+            'store_id' => $store->id,
             'customer_name' => $customer->name,
             'customer_phone' => $customer->phone,
             'shipping_address' => 'Jl. Contoh Sofa No. 1, Jakarta Pusat, DKI Jakarta',
@@ -235,6 +236,7 @@ class DatabaseSeeder extends Seeder
         Notification::updateOrCreate([
             'order_id' => $order->id,
             'channel' => 'whatsapp',
+            'event_type' => 'order_created',
             'recipient' => $customer->phone,
         ], [
             'user_id' => $customer->id,

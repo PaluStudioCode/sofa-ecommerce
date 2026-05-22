@@ -29,7 +29,6 @@ const form = useForm({
     color: '',
     price: 0,
     stock: 0,
-    reserved_stock: 0,
     status: 'aktif',
 });
 
@@ -61,7 +60,6 @@ function edit(variant) {
         color: variant.color || '',
         price: variant.price,
         stock: variant.stock,
-        reserved_stock: variant.reserved_stock,
         status: variant.status,
     });
 }
@@ -108,9 +106,9 @@ function destroyVariant(variant) {
                 <FormInput id="color" v-model="form.color" label="Warna" :error="form.errors.color" />
                 <FormInput id="price" v-model="form.price" type="number" label="Harga" :error="form.errors.price" required />
                 <FormInput id="stock" v-model="form.stock" type="number" label="Stok Fisik" :error="form.errors.stock" required />
-                <FormInput id="reserved_stock" v-model="form.reserved_stock" type="number" label="Reserved Stock" :error="form.errors.reserved_stock" required />
                 <FormSelect id="variant_status" v-model="form.status" label="Status" :options="statuses" :error="form.errors.status" required />
             </div>
+            <p class="mt-3 text-sm text-neutral-muted">Reserved stock ditampilkan pada tabel dan hanya diubah otomatis oleh sistem checkout/pembayaran.</p>
             <div class="mt-4 flex gap-2">
                 <AppButton type="submit" :loading="form.processing">
                     <Plus class="h-4 w-4" />

@@ -5,9 +5,6 @@ namespace App\Providers;
 use App\Services\Fonnte\FakeFonnteNotificationClient;
 use App\Services\Fonnte\FonnteNotificationClient;
 use App\Services\Fonnte\HttpFonnteNotificationClient;
-use App\Services\GoogleMaps\FakeGoogleMapsClient;
-use App\Services\GoogleMaps\GoogleMapsClient;
-use App\Services\GoogleMaps\HttpGoogleMapsClient;
 use App\Services\Midtrans\FakeMidtransPaymentGateway;
 use App\Services\Midtrans\HttpMidtransPaymentGateway;
 use App\Services\Midtrans\MidtransPaymentGateway;
@@ -27,12 +24,6 @@ class AppServiceProvider extends ServiceProvider
             return config('services.midtrans.driver') === 'fake'
                 ? new FakeMidtransPaymentGateway()
                 : new HttpMidtransPaymentGateway($app->make('Illuminate\Http\Client\Factory'));
-        });
-
-        $this->app->bind(GoogleMapsClient::class, function ($app) {
-            return config('services.google_maps.driver') === 'fake'
-                ? new FakeGoogleMapsClient()
-                : new HttpGoogleMapsClient($app->make('Illuminate\Http\Client\Factory'));
         });
 
         $this->app->bind(FonnteNotificationClient::class, function ($app) {

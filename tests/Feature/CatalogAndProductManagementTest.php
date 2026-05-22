@@ -153,7 +153,7 @@ class CatalogAndProductManagementTest extends TestCase
         $this->assertDatabaseHas('product_variants', [
             'id' => $variant->id,
             'variant_name' => 'Tiga Dudukan',
-            'reserved_stock' => 2,
+            'reserved_stock' => 0,
         ]);
     }
 

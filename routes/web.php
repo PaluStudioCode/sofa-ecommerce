@@ -2,32 +2,36 @@
 
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\LandingSectionController;
+use App\Http\Controllers\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\ProductImageController;
 use App\Http\Controllers\Admin\ProductVariantController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\ShipmentController;
+use App\Http\Controllers\Admin\ShippingAreaController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CustomerOrderController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MidtransCallbackController;
+use App\Http\Controllers\Owner\MonitoringController as OwnerMonitoringController;
+use App\Http\Controllers\Owner\ReportController as OwnerReportController;
 use App\Http\Controllers\PaymentAttemptController;
 use App\Http\Controllers\ProfileController;
-use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::get('/', HomeController::class)->name('home');
 Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
 Route::get('/products/{product:slug}', [CatalogController::class, 'show'])->name('products.show');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard', [
-        'navigationGroups' => DashboardNavigation::forUser(request()->user()),
-        'breadcrumbs' => [
-            ['label' => 'Dashboard', 'href' => route('dashboard')],
-        ],
-    ]);
-})->middleware(['auth', 'verified', 'permission:view_dashboard'])->name('dashboard');
+Route::get('/dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified', 'permission:view_dashboard'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -45,6 +49,8 @@ Route::middleware(['auth', 'verified', 'role:customer'])->group(function () {
     Route::post('/checkout/location', [CheckoutController::class, 'resolveLocation'])->name('checkout.location');
     Route::post('/checkout/quote', [CheckoutController::class, 'quoteRequest'])->name('checkout.quote');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+    Route::get('/orders', [CustomerOrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}', [CustomerOrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/payments', [PaymentAttemptController::class, 'store'])->name('payments.store');
 });
 
@@ -75,6 +81,51 @@ Route::middleware(['auth', 'verified'])
         Route::resource('product-images', ProductImageController::class)
             ->only(['index', 'store', 'update', 'destroy'])
             ->middleware('permission:manage_products');
+        Route::resource('users', UserController::class)
+            ->only(['index', 'store', 'update', 'destroy'])
+            ->middleware('permission:manage_users');
+        Route::get('roles', [RoleController::class, 'index'])
+            ->middleware('permission:manage_users')
+            ->name('roles.index');
+        Route::resource('vouchers', VoucherController::class)
+            ->except(['show'])
+            ->middleware('permission:manage_vouchers');
+        Route::resource('orders', AdminOrderController::class)
+            ->only(['index', 'show', 'update'])
+            ->middleware('permission:manage_orders');
+        Route::resource('payments', AdminPaymentController::class)
+            ->only(['index', 'show'])
+            ->middleware('permission:manage_payments');
+        Route::resource('shipping-areas', ShippingAreaController::class)
+            ->only(['index', 'store', 'update', 'destroy'])
+            ->parameters(['shipping-areas' => 'shippingArea'])
+            ->middleware('permission:manage_shipping_areas');
+        Route::get('shipments', [ShipmentController::class, 'index'])
+            ->middleware('permission:manage_shipments')
+            ->name('shipments.index');
+        Route::put('shipments/{order}', [ShipmentController::class, 'update'])
+            ->middleware('permission:manage_shipments')
+            ->name('shipments.update');
+    });
+
+Route::middleware(['auth', 'verified', 'permission:view_reports'])
+    ->prefix('dashboard/reports')
+    ->name('owner.reports.')
+    ->group(function () {
+        Route::get('sales', [OwnerReportController::class, 'sales'])->name('sales');
+        Route::get('products', [OwnerReportController::class, 'products'])->name('products');
+        Route::get('vouchers', [OwnerReportController::class, 'vouchers'])->name('vouchers');
+        Route::get('shipping', [OwnerReportController::class, 'shipping'])->name('shipping');
+    });
+
+Route::middleware(['auth', 'verified', 'role:owner'])
+    ->prefix('dashboard/monitoring')
+    ->name('owner.monitoring.')
+    ->group(function () {
+        Route::get('orders', [OwnerMonitoringController::class, 'orders'])->name('orders');
+        Route::get('orders/{order}', [OwnerMonitoringController::class, 'orderShow'])->name('orders.show');
+        Route::get('payments', [OwnerMonitoringController::class, 'payments'])->name('payments');
+        Route::get('shipments', [OwnerMonitoringController::class, 'shipments'])->name('shipments');
     });
 
 require __DIR__.'/auth.php';

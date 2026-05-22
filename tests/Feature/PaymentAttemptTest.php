@@ -8,7 +8,7 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -28,9 +28,9 @@ class PaymentAttemptTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 2,
         ]);
-        ShippingArea::factory()->create([
-            'center_latitude' => -6.2,
-            'center_longitude' => 106.816666,
+        Store::factory()->create([
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
             'priority' => 3,
@@ -38,7 +38,7 @@ class PaymentAttemptTest extends TestCase
         ]);
 
         $this->actingAs($customer)
-            ->post(route('checkout.location'), ['place_id' => 'fake-place'])
+            ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
 
         $this->actingAs($customer)
@@ -200,6 +200,18 @@ class PaymentAttemptTest extends TestCase
             $this->assertSame($expectedStatus, $order->fresh()->payment_status);
             $this->assertSame($expectedStatus === 'pending' ? 2 : 0, $variant->fresh()->reserved_stock);
         }
+    }
+
+    private function locationPayload(): array
+    {
+        return [
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
+            'formatted_address' => 'Jl. Contoh Sofa No. 1, Jakarta, Indonesia',
+            'city' => 'Jakarta',
+            'district' => 'Gambir',
+            'postal_code' => '10110',
+        ];
     }
 
     private function payableOrder(int $stock = 5, int $reserved = 2, int $quantity = 2): array

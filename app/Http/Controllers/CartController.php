@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CartItem;
 use App\Models\ProductVariant;
+use App\Support\MediaUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -109,7 +110,7 @@ class CartController extends Controller
             'product_name' => $product?->name,
             'product_slug' => $product?->slug,
             'category' => $product?->category?->name,
-            'image_url' => $product?->primaryImage?->file_path ? asset('storage/'.$product->primaryImage->file_path) : null,
+            'image_url' => MediaUrl::fromPath($product?->primaryImage?->file_path),
             'variant_name' => $variant?->variant_name ?: $variant?->sku,
             'sku' => $variant?->sku,
             'size' => $variant?->size,

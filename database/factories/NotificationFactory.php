@@ -16,6 +16,7 @@ class NotificationFactory extends Factory
             'user_id' => User::factory(),
             'order_id' => Order::factory(),
             'channel' => 'whatsapp',
+            'event_type' => 'order_created',
             'recipient' => fake()->phoneNumber(),
             'message' => fake()->sentence(),
             'status' => 'pending',

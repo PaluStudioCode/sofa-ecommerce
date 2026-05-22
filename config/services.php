@@ -50,14 +50,6 @@ return [
             : 'https://api.sandbox.midtrans.com',
     ],
 
-    'google_maps' => [
-        'driver' => env('GOOGLE_MAPS_DRIVER', env('APP_ENV') === 'testing' ? 'fake' : 'http'),
-        'api_key' => env('GOOGLE_MAPS_API_KEY'),
-        'browser_key' => env('VITE_GOOGLE_MAPS_API_KEY'),
-        'map_id' => env('GOOGLE_MAPS_MAP_ID'),
-        'api_base_url' => env('GOOGLE_MAPS_API_BASE_URL', 'https://maps.googleapis.com/maps/api'),
-    ],
-
     'fonnte' => [
         'driver' => env('FONNTE_DRIVER', env('APP_ENV') === 'testing' ? 'fake' : 'http'),
         'token' => env('FONNTE_TOKEN'),

@@ -44,7 +44,7 @@ class DashboardNavigation
             [
                 'label' => 'Pengiriman',
                 'items' => [
-                    self::item('Area Ongkir Radius', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
+                    self::item('Toko & Radius Layanan', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
                     self::item('Pengiriman Internal', 'admin.shipments.index', '/dashboard/shipments', 'Truck', 'manage_shipments'),
                 ],
             ],

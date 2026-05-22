@@ -3,7 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Order;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,7 +20,7 @@ class OrderFactory extends Factory
             'order_number' => 'ORD-'.now()->format('Ymd').'-'.fake()->unique()->numerify('######'),
             'user_id' => User::factory(),
             'voucher_id' => null,
-            'shipping_area_id' => ShippingArea::factory(),
+            'store_id' => Store::factory(),
             'customer_name' => fake()->name(),
             'customer_phone' => fake()->phoneNumber(),
             'shipping_address' => fake()->address(),

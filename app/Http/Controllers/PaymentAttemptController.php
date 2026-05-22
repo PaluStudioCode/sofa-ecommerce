@@ -13,10 +13,18 @@ class PaymentAttemptController extends Controller
     {
         abort_unless($order->user_id === $request->user()->id, 404);
 
+        $data = $request->validate([
+            'return_to' => ['nullable', 'in:checkout,order'],
+        ]);
+
         $payments->createAttempt($order);
 
+        $route = ($data['return_to'] ?? 'checkout') === 'order'
+            ? 'orders.show'
+            : 'checkout.index';
+
         return redirect()
-            ->route('checkout.index', ['order' => $order->id])
+            ->route($route, ['order' => $order->id])
             ->with('success', 'Payment attempt baru dibuat.');
     }
 }

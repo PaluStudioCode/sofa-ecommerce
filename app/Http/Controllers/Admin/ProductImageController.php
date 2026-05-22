@@ -7,10 +7,10 @@ use App\Http\Requests\Admin\ProductImageRequest;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Support\MediaUrl;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,7 +78,7 @@ class ProductImageController extends Controller
         $data['is_primary'] = $request->boolean('is_primary');
 
         if ($request->hasFile('image')) {
-            Storage::disk('public')->delete($productImage->file_path);
+            MediaUrl::deleteLocal($productImage->file_path);
             $data['file_path'] = $request->file('image')->store('products', 'public');
         }
 
@@ -102,7 +102,7 @@ class ProductImageController extends Controller
         $productId = $productImage->product_id;
         $wasPrimary = $productImage->is_primary;
 
-        Storage::disk('public')->delete($productImage->file_path);
+        MediaUrl::deleteLocal($productImage->file_path);
         $productImage->delete();
 
         if ($wasPrimary) {
@@ -132,7 +132,7 @@ class ProductImageController extends Controller
             'product_name' => $image->product?->name,
             'product_variant_id' => $image->product_variant_id,
             'variant_name' => $image->variant?->variant_name ?: $image->variant?->sku,
-            'url' => asset('storage/'.$image->file_path),
+            'url' => MediaUrl::fromPath($image->file_path),
             'alt_text' => $image->alt_text,
             'sort_order' => $image->sort_order,
             'is_primary' => $image->is_primary,

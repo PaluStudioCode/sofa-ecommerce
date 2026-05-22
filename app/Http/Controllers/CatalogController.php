@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -73,7 +74,7 @@ class CatalogController extends Controller
                 'category' => $product->category?->only(['id', 'name', 'slug']),
                 'images' => $product->images->map(fn ($image) => [
                     'id' => $image->id,
-                    'url' => asset('storage/'.$image->file_path),
+                    'url' => MediaUrl::fromPath($image->file_path),
                     'alt_text' => $image->alt_text ?: $product->name,
                     'is_primary' => $image->is_primary,
                 ]),
@@ -105,7 +106,7 @@ class CatalogController extends Controller
             'name' => $product->name,
             'slug' => $product->slug,
             'category' => $product->category?->name,
-            'image_url' => $product->primaryImage?->file_path ? asset('storage/'.$product->primaryImage->file_path) : null,
+            'image_url' => MediaUrl::fromPath($product->primaryImage?->file_path),
             'min_price' => (float) $activeVariants->min('price'),
             'max_price' => (float) $activeVariants->max('price'),
             'available' => $activeVariants->sum(fn (ProductVariant $variant) => $variant->availableStock()) > 0,

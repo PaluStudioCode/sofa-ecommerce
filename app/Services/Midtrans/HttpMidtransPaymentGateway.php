@@ -15,11 +15,18 @@ class HttpMidtransPaymentGateway implements MidtransPaymentGateway
     public function createSnapTransaction(array $payload): array
     {
         $serverKey = $this->serverKey();
-
-        $response = $this->http
+        $request = $this->http
             ->withBasicAuth($serverKey, '')
             ->acceptJson()
-            ->asJson()
+            ->asJson();
+
+        if ($this->callbackUrl()) {
+            $request = $request->withHeaders([
+                'X-Override-Notification' => $this->callbackUrl(),
+            ]);
+        }
+
+        $response = $request
             ->post(rtrim((string) config('services.midtrans.snap_base_url'), '/').'/snap/v1/transactions', $payload)
             ->throw();
 

@@ -103,12 +103,12 @@ return new class extends Migration
             $table->index(['status', 'start_at', 'end_at']);
         });
 
-        Schema::create('shipping_areas', function (Blueprint $table) {
+        Schema::create('stores', function (Blueprint $table) {
             $table->id();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->decimal('center_latitude', 10, 8);
-            $table->decimal('center_longitude', 11, 8);
+            $table->decimal('latitude', 10, 8);
+            $table->decimal('longitude', 11, 8);
             $table->decimal('radius_km', 8, 2)->unsigned();
             $table->decimal('shipping_cost', 15, 2)->unsigned();
             $table->unsignedInteger('priority')->default(0);
@@ -117,7 +117,7 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->index(['is_active', 'priority']);
-            $table->index(['center_latitude', 'center_longitude']);
+            $table->index(['latitude', 'longitude']);
         });
 
         Schema::create('orders', function (Blueprint $table) {
@@ -125,7 +125,7 @@ return new class extends Migration
             $table->string('order_number', 100)->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnUpdate()->restrictOnDelete();
             $table->foreignId('voucher_id')->nullable()->constrained()->cascadeOnUpdate()->nullOnDelete();
-            $table->foreignId('shipping_area_id')->nullable()->constrained()->cascadeOnUpdate()->nullOnDelete();
+            $table->foreignId('store_id')->nullable()->constrained()->cascadeOnUpdate()->nullOnDelete();
             $table->string('customer_name');
             $table->string('customer_phone', 30);
             $table->text('shipping_address');
@@ -259,7 +259,7 @@ return new class extends Migration
         });
 
         DB::statement('ALTER TABLE product_variants ADD CONSTRAINT chk_product_variants_reserved_stock CHECK (reserved_stock <= stock)');
-        DB::statement('ALTER TABLE shipping_areas ADD CONSTRAINT chk_shipping_areas_radius_positive CHECK (radius_km > 0)');
+        DB::statement('ALTER TABLE stores ADD CONSTRAINT chk_stores_radius_positive CHECK (radius_km > 0)');
         DB::statement('ALTER TABLE vouchers ADD CONSTRAINT chk_vouchers_used_count_quota CHECK (quota IS NULL OR used_count <= quota)');
     }
 
@@ -272,7 +272,7 @@ return new class extends Migration
         Schema::dropIfExists('payments');
         Schema::dropIfExists('order_items');
         Schema::dropIfExists('orders');
-        Schema::dropIfExists('shipping_areas');
+        Schema::dropIfExists('stores');
         Schema::dropIfExists('vouchers');
         Schema::dropIfExists('cart_items');
         Schema::dropIfExists('product_images');

@@ -25,7 +25,6 @@ class ProductVariantRequest extends FormRequest
             'color' => ['nullable', 'string', 'max:100'],
             'price' => ['required', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
-            'reserved_stock' => ['required', 'integer', 'min:0', 'lte:stock'],
             'status' => ['required', Rule::in(['aktif', 'nonaktif', 'stok_habis'])],
         ];
     }

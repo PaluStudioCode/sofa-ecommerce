@@ -13,7 +13,7 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Shipment;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
@@ -36,7 +36,7 @@ class DatabaseFoundationTest extends TestCase
             'cart_items',
             'vouchers',
             'voucher_usages',
-            'shipping_areas',
+            'stores',
             'orders',
             'order_items',
             'payments',
@@ -65,8 +65,8 @@ class DatabaseFoundationTest extends TestCase
             'product_variant_id' => $variant->id,
         ]);
         $voucher = Voucher::factory()->create();
-        $area = ShippingArea::factory()->create();
-        $order = Order::factory()->for($user)->for($area, 'shippingArea')->create(['voucher_id' => $voucher->id]);
+        $store = Store::factory()->create();
+        $order = Order::factory()->for($user)->for($store)->create(['voucher_id' => $voucher->id]);
         $orderItem = OrderItem::factory()->create([
             'order_id' => $order->id,
             'product_id' => $product->id,

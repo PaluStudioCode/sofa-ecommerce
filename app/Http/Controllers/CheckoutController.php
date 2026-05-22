@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\ProductVariant;
-use App\Models\ShippingArea;
+use App\Models\Store;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
-use App\Services\GoogleMaps\GoogleMapsClient;
 use App\Services\Midtrans\MidtransPaymentGateway;
+use App\Services\Notifications\WhatsAppNotificationService;
 use App\Services\Payments\PaymentAttemptService;
+use App\Services\Vouchers\VoucherStatusService;
+use App\Support\GeoDistance;
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,7 +25,7 @@ use Inertia\Response;
 
 class CheckoutController extends Controller
 {
-    public function index(Request $request, GoogleMapsClient $maps, MidtransPaymentGateway $midtrans): Response|RedirectResponse
+    public function index(Request $request, MidtransPaymentGateway $midtrans): Response|RedirectResponse
     {
         $createdOrder = $this->createdOrder($request);
         $items = $this->cartItems($request);
@@ -43,26 +46,23 @@ class CheckoutController extends Controller
             'summary' => $summary,
             'location' => $location,
             'voucherCode' => $voucherCode,
-            'googleMaps' => $maps->browserConfig(),
             'midtrans' => $midtrans->clientConfig(),
             'createdOrder' => $createdOrder,
         ]);
     }
 
-    public function resolveLocation(Request $request, GoogleMapsClient $maps): RedirectResponse
+    public function resolveLocation(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'place_id' => ['required', 'string', 'max:255'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'formatted_address' => ['required', 'string', 'max:2000'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'district' => ['nullable', 'string', 'max:255'],
+            'postal_code' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $geocode = $maps->geocodePlace($data['place_id']);
-        $location = $this->locationFromGeocode($geocode);
-
-        if (! $location) {
-            throw ValidationException::withMessages([
-                'place_id' => 'Lokasi tidak memiliki alamat atau koordinat yang valid.',
-            ]);
-        }
+        $location = $this->locationFromRequest($data);
 
         $request->session()->put('checkout.location', $location);
 
@@ -85,7 +85,7 @@ class CheckoutController extends Controller
 
         if (! $location) {
             throw ValidationException::withMessages([
-                'location' => 'Pilih alamat pengiriman dari Google Maps terlebih dahulu.',
+                'location' => 'Pilih alamat pengiriman dari peta terlebih dahulu.',
             ]);
         }
 
@@ -96,7 +96,7 @@ class CheckoutController extends Controller
         return redirect()->route('checkout.index')->with('success', 'Ringkasan checkout diperbarui.');
     }
 
-    public function store(Request $request, PaymentAttemptService $payments): RedirectResponse
+    public function store(Request $request, PaymentAttemptService $payments, WhatsAppNotificationService $notifications): RedirectResponse
     {
         $data = $request->validate([
             'customer_phone' => ['required', 'string', 'max:30'],
@@ -108,7 +108,7 @@ class CheckoutController extends Controller
 
         if (! $location) {
             throw ValidationException::withMessages([
-                'location' => 'Pilih alamat pengiriman dari Google Maps terlebih dahulu.',
+                'location' => 'Pilih alamat pengiriman dari peta terlebih dahulu.',
             ]);
         }
 
@@ -139,7 +139,7 @@ class CheckoutController extends Controller
                 'order_number' => $this->nextOrderNumber(),
                 'user_id' => $request->user()->id,
                 'voucher_id' => $quote['voucher']['id'] ?? null,
-                'shipping_area_id' => $quote['shipping_area']['id'],
+                'store_id' => $quote['store']['id'],
                 'customer_name' => $request->user()->name,
                 'customer_phone' => $data['customer_phone'],
                 'shipping_address' => $location['formatted_address'],
@@ -195,6 +195,7 @@ class CheckoutController extends Controller
         });
 
         $request->session()->forget(['checkout.location', 'checkout.voucher_code']);
+        $notifications->sendOrderEvent($order, 'order_created');
         $payments->createAttempt($order);
 
         return redirect()
@@ -222,7 +223,7 @@ class CheckoutController extends Controller
             'product_name' => $item->product->name,
             'product_slug' => $item->product->slug,
             'category' => $item->product->category?->name,
-            'image_url' => $item->product->primaryImage?->file_path ? asset('storage/'.$item->product->primaryImage->file_path) : null,
+            'image_url' => MediaUrl::fromPath($item->product->primaryImage?->file_path),
             'variant_name' => $item->variant->variant_name ?: $item->variant->sku,
             'specification' => collect([$item->variant->size, $item->variant->material, $item->variant->color])->filter()->join(' / '),
             'unit_price' => (float) $item->variant->price,
@@ -240,9 +241,9 @@ class CheckoutController extends Controller
             $subtotal += (float) $item->variant->price * $item->quantity;
         }
 
-        $shippingArea = $location ? $this->matchingShippingArea((float) $location['latitude'], (float) $location['longitude']) : null;
+        $store = $location ? $this->matchingStore((float) $location['latitude'], (float) $location['longitude']) : null;
 
-        if ($strict && ! $shippingArea) {
+        if ($strict && ! $store) {
             throw ValidationException::withMessages([
                 'location' => 'Alamat belum masuk wilayah layanan toko.',
             ]);
@@ -252,18 +253,18 @@ class CheckoutController extends Controller
             ? $this->validVoucher($voucherCode, $subtotal, $userId, $lockVoucher)
             : null;
         $discount = $voucher ? $this->discountAmount($voucher, $subtotal) : 0.0;
-        $shippingCost = $shippingArea ? (float) $shippingArea->shipping_cost : 0.0;
+        $shippingCost = $store ? (float) $store->shipping_cost : 0.0;
 
         return [
             'subtotal' => $subtotal,
             'discount_amount' => min($discount, $subtotal),
             'shipping_cost' => $shippingCost,
             'total' => max(0, $subtotal - min($discount, $subtotal)) + $shippingCost,
-            'shipping_area' => $shippingArea ? [
-                'id' => $shippingArea->id,
-                'name' => $shippingArea->name,
-                'shipping_cost' => (float) $shippingArea->shipping_cost,
-                'priority' => $shippingArea->priority,
+            'store' => $store ? [
+                'id' => $store->id,
+                'name' => $store->name,
+                'shipping_cost' => (float) $store->shipping_cost,
+                'priority' => $store->priority,
             ] : null,
             'voucher' => $voucher ? [
                 'id' => $voucher->id,
@@ -272,7 +273,7 @@ class CheckoutController extends Controller
                 'discount_type' => $voucher->discount_type,
                 'discount_value' => (float) $voucher->discount_value,
             ] : null,
-            'can_submit' => $items->isNotEmpty() && $location !== null && $shippingArea !== null,
+            'can_submit' => $items->isNotEmpty() && $location !== null && $store !== null,
         ];
     }
 
@@ -291,22 +292,20 @@ class CheckoutController extends Controller
         }
     }
 
-    private function matchingShippingArea(float $latitude, float $longitude): ?ShippingArea
+    private function matchingStore(float $latitude, float $longitude): ?Store
     {
-        $maps = app(GoogleMapsClient::class);
-
-        return ShippingArea::query()
+        return Store::query()
             ->where('is_active', true)
             ->get()
-            ->filter(function (ShippingArea $area) use ($maps, $latitude, $longitude) {
-                $distance = $maps->distanceInMeters(
-                    (float) $area->center_latitude,
-                    (float) $area->center_longitude,
+            ->filter(function (Store $store) use ($latitude, $longitude) {
+                $distance = GeoDistance::haversineMeters(
+                    (float) $store->latitude,
+                    (float) $store->longitude,
                     $latitude,
                     $longitude
                 );
 
-                return $distance <= ((float) $area->radius_km * 1000);
+                return $distance <= ((float) $store->radius_km * 1000);
             })
             ->sortByDesc('priority')
             ->first();
@@ -321,6 +320,10 @@ class CheckoutController extends Controller
         }
 
         $voucher = $query->first();
+
+        if ($voucher) {
+            $voucher = app(VoucherStatusService::class)->sync($voucher);
+        }
 
         if (! $voucher || $voucher->status !== 'aktif') {
             throw ValidationException::withMessages(['voucher_code' => 'Voucher tidak valid.']);
@@ -362,35 +365,16 @@ class CheckoutController extends Controller
             : $discount;
     }
 
-    private function locationFromGeocode(array $geocode): ?array
+    private function locationFromRequest(array $data): array
     {
-        $result = $geocode['results'][0] ?? null;
-        $lat = $result['geometry']['location']['lat'] ?? null;
-        $lng = $result['geometry']['location']['lng'] ?? null;
-        $address = $result['formatted_address'] ?? null;
-
-        if (! $result || $address === null || $lat === null || $lng === null) {
-            return null;
-        }
-
-        $components = collect($result['address_components'] ?? []);
-
         return [
-            'formatted_address' => $address,
-            'city' => $this->addressComponent($components, ['administrative_area_level_2', 'locality']),
-            'district' => $this->addressComponent($components, ['administrative_area_level_3', 'sublocality']),
-            'postal_code' => $this->addressComponent($components, ['postal_code']),
-            'latitude' => (float) $lat,
-            'longitude' => (float) $lng,
-            'place_id' => $result['place_id'] ?? null,
+            'formatted_address' => trim((string) $data['formatted_address']),
+            'city' => filled($data['city'] ?? null) ? trim((string) $data['city']) : null,
+            'district' => filled($data['district'] ?? null) ? trim((string) $data['district']) : null,
+            'postal_code' => filled($data['postal_code'] ?? null) ? trim((string) $data['postal_code']) : null,
+            'latitude' => (float) $data['latitude'],
+            'longitude' => (float) $data['longitude'],
         ];
-    }
-
-    private function addressComponent($components, array $types): ?string
-    {
-        $component = $components->first(fn ($component) => count(array_intersect($component['types'] ?? [], $types)) > 0);
-
-        return $component['long_name'] ?? null;
     }
 
     private function createdOrder(Request $request): ?array
@@ -453,7 +437,7 @@ class CheckoutController extends Controller
             'discount_amount' => 0,
             'shipping_cost' => 0,
             'total' => 0,
-            'shipping_area' => null,
+            'store' => null,
             'voucher' => null,
             'can_submit' => false,
         ];

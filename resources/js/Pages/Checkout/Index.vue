@@ -7,7 +7,7 @@ import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
-import MapPickerShell from '@/Components/UI/MapPickerShell.vue';
+import LeafletLocationPicker from '@/Components/UI/LeafletLocationPicker.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import VoucherInput from '@/Components/UI/VoucherInput.vue';
 
@@ -16,7 +16,6 @@ const props = defineProps({
     summary: { type: Object, required: true },
     location: { type: Object, default: null },
     voucherCode: { type: String, default: '' },
-    googleMaps: { type: Object, default: () => ({}) },
     midtrans: { type: Object, default: () => ({}) },
     createdOrder: { type: Object, default: null },
 });
@@ -27,7 +26,12 @@ const paymentModalOpen = ref(false);
 const snapLoading = ref(false);
 
 const locationForm = useForm({
-    place_id: props.location?.place_id || 'demo-checkout-location',
+    latitude: props.location?.latitude || '',
+    longitude: props.location?.longitude || '',
+    formatted_address: props.location?.formatted_address || '',
+    city: props.location?.city || '',
+    district: props.location?.district || '',
+    postal_code: props.location?.postal_code || '',
 });
 
 const quoteForm = useForm({
@@ -49,6 +53,11 @@ const canOpenPendingPayment = computed(() => {
 
     return !props.createdOrder.payment.expired_at || new Date(props.createdOrder.payment.expired_at) > new Date();
 });
+const returnedFromPayment = computed(() => {
+    const url = new URL(page.url, 'http://localhost');
+
+    return url.searchParams.has('payment_return') || url.searchParams.has('transaction_status') || url.searchParams.has('result');
+});
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -62,6 +71,13 @@ function resolveLocation() {
     locationForm.post(route('checkout.location'), {
         preserveScroll: true,
     });
+}
+
+function syncAddressDetails(details) {
+    locationForm.formatted_address = details.formatted_address || locationForm.formatted_address;
+    locationForm.city = details.city || '';
+    locationForm.district = details.district || '';
+    locationForm.postal_code = details.postal_code || '';
 }
 
 function applyVoucher() {
@@ -152,7 +168,7 @@ function createPaymentAttempt() {
 }
 
 onMounted(() => {
-    if (canOpenPendingPayment.value) {
+    if (canOpenPendingPayment.value && !returnedFromPayment.value) {
         openPaymentModal();
     }
 });
@@ -206,9 +222,10 @@ onMounted(() => {
                             <CreditCard class="h-4 w-4" />
                             Coba Bayar Lagi
                         </AppButton>
+                        <AppButton :href="route('orders.show', createdOrder.id)" variant="secondary">Detail Pesanan</AppButton>
                     </div>
                     <Alert v-if="createdOrder.payment?.status === 'pending'" tone="info" class="mt-4">
-                        Pembayaran diproses melalui Midtrans Snap. Jika modal ditutup, status tetap pending sampai callback diterima.
+                        {{ returnedFromPayment ? 'Kami sedang menunggu konfirmasi pembayaran dari Midtrans.' : 'Pembayaran diproses melalui Midtrans Snap. Jika modal ditutup, status tetap pending sampai konfirmasi diterima.' }}
                     </Alert>
                     <Alert v-else-if="createdOrder.payment?.status === 'expired'" tone="warning" class="mt-4">
                         Batas waktu pembayaran sudah habis. Buat payment attempt baru untuk mencoba lagi.
@@ -259,37 +276,35 @@ onMounted(() => {
                             <div class="mt-4 grid gap-4">
                                 <FormInput id="customer_phone" v-model="orderForm.customer_phone" label="Nomor telepon" :error="orderForm.errors.customer_phone" required />
 
-                                <MapPickerShell title="Alamat Pengiriman" :address="location?.formatted_address || ''" :error="locationForm.errors.place_id || quoteForm.errors.location || orderForm.errors.location">
+                                <LeafletLocationPicker
+                                    v-model:latitude="locationForm.latitude"
+                                    v-model:longitude="locationForm.longitude"
+                                    v-model:address="locationForm.formatted_address"
+                                    title="Alamat Pengiriman"
+                                    marker-label="Alamat belum dipilih"
+                                    helper="Cari alamat atau klik titik pengiriman di peta."
+                                    search-placeholder="Cari alamat pengiriman"
+                                    :error="locationForm.errors.latitude || locationForm.errors.longitude || locationForm.errors.formatted_address || quoteForm.errors.location || orderForm.errors.location"
+                                    @address-details="syncAddressDetails"
+                                >
                                     <template #actions>
                                         <StatusBadge :status="location ? 'aktif' : 'pending'" :label="location ? 'Terpilih' : 'Belum dipilih'" />
                                     </template>
-                                    <div class="w-full max-w-xl text-left">
-                                        <div class="rounded-md border border-neutral-border bg-white p-4">
-                                            <label class="block" for="place_id">
-                                                <span class="text-sm font-medium text-neutral-text">Pencarian lokasi</span>
-                                                <input
-                                                    id="place_id"
-                                                    v-model="locationForm.place_id"
-                                                    class="mt-1 block min-h-10 w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary"
-                                                    type="text"
-                                                    placeholder="Masukkan hasil pencarian lokasi"
-                                                />
-                                            </label>
-                                            <div class="mt-3 flex flex-wrap gap-2">
-                                                <AppButton type="button" :loading="locationForm.processing" @click="resolveLocation">
-                                                    <MapPin class="h-4 w-4" />
-                                                    Pilih Lokasi
-                                                </AppButton>
-                                            </div>
-                                            <div v-if="location" class="mt-4 rounded-md bg-neutral-light p-3 text-sm text-neutral-muted">
-                                                <p class="font-semibold text-neutral-text">{{ location.formatted_address }}</p>
-                                                <p v-if="location.city || location.district || location.postal_code" class="mt-1">
-                                                    {{ [location.city, location.district, location.postal_code].filter(Boolean).join(', ') }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </MapPickerShell>
+                                </LeafletLocationPicker>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <AppButton type="button" :disabled="!locationForm.latitude || !locationForm.longitude || !locationForm.formatted_address" :loading="locationForm.processing" @click="resolveLocation">
+                                        <MapPin class="h-4 w-4" />
+                                        Gunakan Alamat Ini
+                                    </AppButton>
+                                </div>
+
+                                <div v-if="location" class="rounded-md bg-neutral-light p-3 text-sm text-neutral-muted">
+                                    <p class="font-semibold text-neutral-text">{{ location.formatted_address }}</p>
+                                    <p v-if="location.city || location.district || location.postal_code" class="mt-1">
+                                        {{ [location.city, location.district, location.postal_code].filter(Boolean).join(', ') }}
+                                    </p>
+                                </div>
 
                                 <label class="block" for="shipping_note">
                                     <span class="text-sm font-medium text-neutral-text">Catatan alamat</span>
@@ -318,15 +333,15 @@ onMounted(() => {
                             </div>
                             <div class="flex justify-between gap-3">
                                 <span class="text-neutral-muted">Ongkir internal</span>
-                                <span class="font-semibold text-neutral-text">{{ summary.shipping_area ? formatRupiah(summary.shipping_cost) : 'Pilih alamat' }}</span>
+                                <span class="font-semibold text-neutral-text">{{ summary.store ? formatRupiah(summary.shipping_cost) : 'Pilih alamat' }}</span>
                             </div>
                             <div v-if="summary.voucher" class="flex justify-between gap-3">
                                 <span class="text-neutral-muted">Voucher</span>
                                 <StatusBadge status="aktif" :label="summary.voucher.code" />
                             </div>
-                            <div v-if="summary.shipping_area" class="flex justify-between gap-3">
-                                <span class="text-neutral-muted">Area ongkir</span>
-                                <span class="text-right font-semibold text-neutral-text">{{ summary.shipping_area.name }}</span>
+                            <div v-if="summary.store" class="flex justify-between gap-3">
+                                <span class="text-neutral-muted">Toko layanan</span>
+                                <span class="text-right font-semibold text-neutral-text">{{ summary.store.name }}</span>
                             </div>
                             <div class="flex justify-between gap-3 border-t border-neutral-border pt-3 text-base">
                                 <span class="font-semibold text-neutral-text">Total</span>

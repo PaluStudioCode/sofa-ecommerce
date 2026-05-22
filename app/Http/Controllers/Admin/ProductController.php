@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Support\MediaUrl;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -100,7 +101,7 @@ class ProductController extends Controller
                 ]),
                 'images' => $product->images->map(fn ($image) => [
                     'id' => $image->id,
-                    'url' => asset('storage/'.$image->file_path),
+                    'url' => MediaUrl::fromPath($image->file_path),
                     'alt_text' => $image->alt_text,
                     'is_primary' => $image->is_primary,
                     'sort_order' => $image->sort_order,
@@ -164,7 +165,7 @@ class ProductController extends Controller
             'category' => $product->category?->name,
             'status' => $product->status,
             'is_featured' => $product->is_featured,
-            'image_url' => $product->primaryImage?->file_path ? asset('storage/'.$product->primaryImage->file_path) : null,
+            'image_url' => MediaUrl::fromPath($product->primaryImage?->file_path),
             'variants_count' => $product->variants_count ?? $product->variants->count(),
             'order_items_count' => $product->order_items_count ?? 0,
             'min_price' => (float) $activeVariants->min('price'),

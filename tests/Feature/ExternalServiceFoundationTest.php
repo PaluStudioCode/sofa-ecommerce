@@ -4,8 +4,6 @@ namespace Tests\Feature;
 
 use App\Services\Fonnte\FakeFonnteNotificationClient;
 use App\Services\Fonnte\FonnteNotificationClient;
-use App\Services\GoogleMaps\FakeGoogleMapsClient;
-use App\Services\GoogleMaps\GoogleMapsClient;
 use App\Services\Midtrans\FakeMidtransPaymentGateway;
 use App\Services\Midtrans\HttpMidtransPaymentGateway;
 use App\Services\Midtrans\MidtransPaymentGateway;
@@ -18,12 +16,10 @@ class ExternalServiceFoundationTest extends TestCase
     {
         config([
             'services.midtrans.driver' => 'fake',
-            'services.google_maps.driver' => 'fake',
             'services.fonnte.driver' => 'fake',
         ]);
 
         $this->assertInstanceOf(FakeMidtransPaymentGateway::class, app(MidtransPaymentGateway::class));
-        $this->assertInstanceOf(FakeGoogleMapsClient::class, app(GoogleMapsClient::class));
         $this->assertInstanceOf(FakeFonnteNotificationClient::class, app(FonnteNotificationClient::class));
     }
 
@@ -58,20 +54,4 @@ class ExternalServiceFoundationTest extends TestCase
         $this->assertSame('failed', $gateway->mapTransactionStatus('failure'));
     }
 
-    public function test_google_maps_fake_supports_map_config_and_distance_calculation(): void
-    {
-        config([
-            'services.google_maps.browser_key' => 'browser-key',
-            'services.google_maps.map_id' => 'map-id',
-        ]);
-
-        $client = new FakeGoogleMapsClient();
-
-        $this->assertSame([
-            'apiKey' => 'browser-key',
-            'mapId' => 'map-id',
-        ], $client->browserConfig());
-
-        $this->assertGreaterThan(1000, $client->distanceInMeters(-6.2, 106.816666, -6.21, 106.826666));
-    }
 }

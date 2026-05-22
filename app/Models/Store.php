@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Database\Factories\ShippingAreaFactory;
+use Database\Factories\StoreFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class ShippingArea extends Model
+class Store extends Model
 {
-    /** @use HasFactory<ShippingAreaFactory> */
+    /** @use HasFactory<StoreFactory> */
     use HasFactory, SoftDeletes;
 
     protected $guarded = [];
@@ -18,8 +18,8 @@ class ShippingArea extends Model
     protected function casts(): array
     {
         return [
-            'center_latitude' => 'decimal:8',
-            'center_longitude' => 'decimal:8',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
             'radius_km' => 'decimal:2',
             'shipping_cost' => 'decimal:2',
             'priority' => 'integer',

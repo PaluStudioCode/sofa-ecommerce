@@ -4,6 +4,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import {
     Boxes,
     ChartNoAxesCombined,
+    ChevronDown,
     Circle,
     CreditCard,
     Images,
@@ -32,8 +33,27 @@ const props = defineProps({
 
 const page = usePage();
 const sidebarOpen = ref(false);
+const openGroups = ref({});
 
 const groups = computed(() => props.navigationGroups.length ? props.navigationGroups : page.props.navigationGroups || []);
+const dashboardItem = computed(() => {
+    for (const group of groups.value) {
+        const item = group.items?.find((item) => item.href === '/dashboard');
+
+        if (item) {
+            return item;
+        }
+    }
+
+    return null;
+});
+const menuGroups = computed(() => groups.value
+    .map((group) => ({
+        ...group,
+        items: group.items?.filter((item) => item.href !== '/dashboard') || [],
+    }))
+    .filter((group) => group.items.length > 0)
+);
 
 const iconMap = {
     Boxes,
@@ -65,6 +85,32 @@ function isActive(item) {
     const current = page.url.split('?')[0];
     return current === item.href || (item.href !== '/dashboard' && current.startsWith(item.href));
 }
+
+function groupKey(group) {
+    return group.label;
+}
+
+function groupHasActiveItem(group) {
+    return group.items?.some((item) => isActive(item));
+}
+
+function isGroupOpen(group, index) {
+    const key = groupKey(group);
+
+    if (Object.prototype.hasOwnProperty.call(openGroups.value, key)) {
+        return openGroups.value[key];
+    }
+
+    return groupHasActiveItem(group) || index === 0;
+}
+
+function toggleGroup(group, index) {
+    const key = groupKey(group);
+    openGroups.value = {
+        ...openGroups.value,
+        [key]: !isGroupOpen(group, index),
+    };
+}
 </script>
 
 <template>
@@ -79,9 +125,31 @@ function isActive(item) {
             </div>
 
             <nav class="h-[calc(100vh-4rem)] overflow-y-auto p-3">
-                <div v-for="group in groups" :key="group.label" class="mb-4">
-                    <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-normal text-neutral-muted">{{ group.label }}</p>
-                    <div class="grid gap-1">
+                <Link
+                    v-if="dashboardItem"
+                    :href="dashboardItem.href"
+                    class="mb-3 flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold"
+                    :class="isActive(dashboardItem) ? 'bg-primary-soft text-neutral-text' : 'text-neutral-muted hover:bg-neutral-light hover:text-neutral-text'"
+                >
+                    <component :is="iconFor(dashboardItem.icon)" class="h-4 w-4 shrink-0" />
+                    <span class="truncate">{{ dashboardItem.label }}</span>
+                </Link>
+
+                <div v-for="(group, index) in menuGroups" :key="group.label" class="mb-3">
+                    <button
+                        type="button"
+                        class="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-normal text-neutral-muted hover:bg-neutral-light hover:text-neutral-text"
+                        :aria-expanded="isGroupOpen(group, index)"
+                        @click="toggleGroup(group, index)"
+                    >
+                        <span class="truncate">{{ group.label }}</span>
+                        <ChevronDown
+                            class="h-4 w-4 shrink-0 transition"
+                            :class="isGroupOpen(group, index) ? 'rotate-180' : ''"
+                        />
+                    </button>
+
+                    <div v-show="isGroupOpen(group, index)" class="mt-1 grid gap-1 border-l border-neutral-border/80 pl-4">
                         <Link
                             v-for="item in group.items"
                             :key="item.label"
@@ -107,9 +175,8 @@ function isActive(item) {
                             <Menu class="h-5 w-5" />
                             <span class="sr-only">Menu</span>
                         </button>
-                        <div>
+                        <div class="min-w-0">
                             <h1 class="text-lg font-semibold text-neutral-text">{{ title }}</h1>
-                            <Breadcrumbs :items="breadcrumbs" class="hidden sm:block" />
                         </div>
                     </div>
 
@@ -126,6 +193,9 @@ function isActive(item) {
             </header>
 
             <main class="p-4 sm:p-6">
+                <div v-if="breadcrumbs.length" class="mb-5">
+                    <Breadcrumbs :items="breadcrumbs" />
+                </div>
                 <slot />
             </main>
         </div>

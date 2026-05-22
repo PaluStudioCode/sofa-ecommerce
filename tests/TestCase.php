@@ -13,7 +13,8 @@ abstract class TestCase extends BaseTestCase
         $this->withoutVite();
         config([
             'services.midtrans.driver' => 'fake',
-            'services.google_maps.driver' => 'fake',
+            'services.midtrans.client_key' => null,
+            'services.midtrans.server_key' => null,
             'services.fonnte.driver' => 'fake',
         ]);
     }
