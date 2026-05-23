@@ -16,8 +16,8 @@ class StoreFactory extends Factory
             'latitude' => fake()->latitude(-6.4, -6.1),
             'longitude' => fake()->longitude(106.6, 107.0),
             'radius_km' => fake()->randomFloat(2, 3, 20),
-            'shipping_cost' => fake()->numberBetween(5, 25) * 10000,
-            'priority' => fake()->numberBetween(0, 10),
+            'shipping_cost' => fake()->numberBetween(1, 5) * 10000,
+            'priority' => 0,
             'is_active' => true,
         ];
     }

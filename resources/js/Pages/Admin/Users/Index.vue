@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import DataTable from '@/Components/UI/DataTable.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
@@ -8,7 +9,8 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useFeedback';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Trash2 } from '@lucide/vue';
 
 const props = defineProps({
@@ -20,7 +22,8 @@ const props = defineProps({
     internalRoles: { type: Array, default: () => [] },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
+const formModalOpen = ref(false);
 const editingId = ref(null);
 const filterForm = useForm({
     keyword: props.filters.keyword || '',
@@ -42,6 +45,13 @@ const columns = [
     { key: 'role', label: 'Role' },
     { key: 'orders_count', label: 'Order' },
 ];
+
+const formTitle = computed(() => editingId.value ? 'Edit Pengguna' : 'Tambah Pengguna');
+
+function openCreateModal() {
+    resetForm();
+    formModalOpen.value = true;
+}
 
 function submitFilter() {
     filterForm.get(route('admin.users.index'), { preserveState: true, replace: true });
@@ -65,9 +75,16 @@ function edit(user) {
         password: '',
         password_confirmation: '',
     });
+    form.clearErrors();
+    formModalOpen.value = true;
 }
 
 function submit() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeModal,
+    };
+
     if (editingId.value) {
         form.transform((data) => ({
             name: data.name,
@@ -75,16 +92,28 @@ function submit() {
             phone: data.phone,
             role: data.role,
         })).put(route('admin.users.update', editingId.value), {
-            onSuccess: resetForm,
+            ...options,
         });
         return;
     }
 
-    form.post(route('admin.users.store'), { onSuccess: resetForm });
+    form.post(route('admin.users.store'), options);
 }
 
-function deactivate(user) {
-    if (window.confirm(`Nonaktifkan pengguna ${user.name}?`)) {
+function closeModal() {
+    if (!form.processing) {
+        formModalOpen.value = false;
+        resetForm();
+    }
+}
+
+async function deactivate(user) {
+    if (await confirm({
+        title: 'Nonaktifkan pengguna?',
+        message: `Pengguna ${user.name} tidak akan bisa memakai akun ini setelah dinonaktifkan.`,
+        confirmText: 'Nonaktifkan',
+        tone: 'danger',
+    })) {
         router.delete(route('admin.users.destroy', user.id));
     }
 }
@@ -94,30 +123,16 @@ function deactivate(user) {
     <Head title="Pengguna" />
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pengguna">
-        <div class="mb-4">
-            <h2 class="text-xl font-semibold text-neutral-text">Manajemen pengguna</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Admin dapat membuat akun internal, mengubah role, dan menonaktifkan akun tanpa melihat password lama.</p>
-            <p v-if="page.props.flash?.success" class="mt-1 text-sm text-success">{{ page.props.flash.success }}</p>
-            <p v-if="page.props.flash?.error" class="mt-1 text-sm text-danger">{{ page.props.flash.error }}</p>
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-neutral-text">Manajemen pengguna</h2>
+                <p class="mt-1 text-sm text-neutral-muted">Admin dapat membuat akun internal, mengubah role, dan menonaktifkan akun tanpa melihat password lama.</p>
+            </div>
+            <AppButton type="button" @click="openCreateModal">
+                <Plus class="h-4 w-4" />
+                Tambah Pengguna
+            </AppButton>
         </div>
-
-        <form class="mb-5 rounded-md border border-neutral-border bg-white p-5" @submit.prevent="submit">
-            <div class="grid gap-4 md:grid-cols-3">
-                <FormInput id="user_name" v-model="form.name" label="Nama" :error="form.errors.name" required />
-                <FormInput id="user_email" v-model="form.email" type="email" label="Email" :error="form.errors.email" required />
-                <FormInput id="user_phone" v-model="form.phone" label="Telepon" :error="form.errors.phone" />
-                <FormSelect id="user_role" v-model="form.role" label="Role" :options="editingId ? roles.filter((role) => role.value !== '') : internalRoles" :error="form.errors.role" required />
-                <FormInput v-if="!editingId" id="user_password" v-model="form.password" type="password" label="Password" :error="form.errors.password" required />
-                <FormInput v-if="!editingId" id="user_password_confirmation" v-model="form.password_confirmation" type="password" label="Konfirmasi Password" :error="form.errors.password_confirmation" required />
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-                <AppButton type="submit" :loading="form.processing">
-                    <Plus class="h-4 w-4" />
-                    {{ editingId ? 'Update Pengguna' : 'Tambah Internal' }}
-                </AppButton>
-                <AppButton v-if="editingId" type="button" variant="secondary" @click="resetForm">Batal</AppButton>
-            </div>
-        </form>
 
         <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_auto]" @submit.prevent="submitFilter">
             <FormInput id="keyword" v-model="filterForm.keyword" label="Keyword" placeholder="Cari nama, email, atau telepon" />
@@ -153,5 +168,26 @@ function deactivate(user) {
         </DataTable>
 
         <Pagination class="mt-4" :links="users.links" />
+
+        <Modal :show="formModalOpen" max-width="2xl" @close="closeModal">
+            <form class="p-6" @submit.prevent="submit">
+                <div class="mb-5">
+                    <h2 class="text-lg font-semibold text-neutral-text">{{ formTitle }}</h2>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <FormInput id="user_name" v-model="form.name" label="Nama" :error="form.errors.name" required />
+                    <FormInput id="user_email" v-model="form.email" type="email" label="Email" :error="form.errors.email" required />
+                    <FormInput id="user_phone" v-model="form.phone" label="Telepon" :error="form.errors.phone" />
+                    <FormSelect id="user_role" v-model="form.role" label="Role" :options="editingId ? roles.filter((role) => role.value !== '') : internalRoles" :error="form.errors.role" required />
+                    <FormInput v-if="!editingId" id="user_password" v-model="form.password" type="password" label="Password" :error="form.errors.password" required />
+                    <FormInput v-if="!editingId" id="user_password_confirmation" v-model="form.password_confirmation" type="password" label="Konfirmasi Password" :error="form.errors.password_confirmation" required />
+                </div>
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <AppButton type="button" variant="secondary" @click="closeModal">Batal</AppButton>
+                    <AppButton type="submit" :loading="form.processing">Simpan</AppButton>
+                </div>
+            </form>
+        </Modal>
     </AuthenticatedLayout>
 </template>

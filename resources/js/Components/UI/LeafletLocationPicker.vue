@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Crosshair, MapPinned } from '@lucide/vue';
+import axios from 'axios';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-control-geocoder';
@@ -16,7 +17,11 @@ const props = defineProps({
     searchPlaceholder: { type: String, default: 'Cari alamat atau wilayah' },
     helper: { type: String, default: 'Klik peta atau gunakan pencarian untuk memilih titik.' },
     markerLabel: { type: String, default: 'Titik terpilih' },
+    pendingAddressLabel: { type: String, default: 'Mengambil alamat lengkap...' },
     showRadius: { type: Boolean, default: false },
+    draggable: { type: Boolean, default: true },
+    reverseOnMove: { type: Boolean, default: true },
+    reverseGeocodeUrl: { type: String, default: '/maps/reverse-geocode' },
 });
 
 const emit = defineEmits([
@@ -33,6 +38,9 @@ let marker = null;
 let circle = null;
 let geocoder = null;
 let geocoderControl = null;
+let reverseGeocodeRequestId = 0;
+let reverseGeocodeAbortController = null;
+const reverseGeocodeCache = new Map();
 
 const fallbackCenter = [-6.2, 106.816666];
 const hasPoint = computed(() => Number.isFinite(toNumber(props.latitude)) && Number.isFinite(toNumber(props.longitude)));
@@ -69,9 +77,20 @@ function updateLayers(centerMap = false) {
     const latLng = L.latLng(toNumber(props.latitude), toNumber(props.longitude));
 
     if (!marker) {
-        marker = L.marker(latLng, { icon: markerIcon() }).addTo(map);
+        marker = L.marker(latLng, {
+            draggable: props.draggable,
+            icon: markerIcon(),
+        })
+            .on('dragend', (event) => reverseGeocode(event.target.getLatLng()))
+            .addTo(map);
     } else {
         marker.setLatLng(latLng);
+
+        if (props.draggable) {
+            marker.dragging?.enable();
+        } else {
+            marker.dragging?.disable();
+        }
     }
 
     const radiusMeters = toNumber(props.radiusKm) * 1000;
@@ -109,7 +128,7 @@ function stripHtml(value) {
 function detailsFromResult(result) {
     const properties = result?.properties || {};
     const address = properties.address || {};
-    const label = result?.name || properties.display_name || stripHtml(result?.html) || coordinateLabel.value;
+    const label = properties.display_name || stripHtml(result?.html) || result?.name || coordinateLabel.value;
 
     return {
         formatted_address: label,
@@ -119,37 +138,90 @@ function detailsFromResult(result) {
     };
 }
 
-function applyPoint(latLng, details = null, centerMap = true) {
+function detailsFromReverseGeocode(result, latLng) {
+    const fallback = `${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)}`;
+
+    return {
+        formatted_address: result?.formatted_address || fallback,
+        city: result?.city || '',
+        district: result?.district || '',
+        postal_code: result?.postal_code || '',
+    };
+}
+
+function applyCoordinates(latLng, centerMap = true) {
     emit('update:latitude', Number(latLng.lat.toFixed(8)));
     emit('update:longitude', Number(latLng.lng.toFixed(8)));
+    nextTick(() => updateLayers(centerMap));
+}
+
+function applyPoint(latLng, details = null, centerMap = true) {
+    applyCoordinates(latLng, centerMap);
 
     if (details) {
         selectedAddress.value = details.formatted_address;
         emit('update:address', details.formatted_address);
         emit('address-details', details);
     } else {
-        selectedAddress.value = `${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)}`;
-        emit('update:address', selectedAddress.value);
-        emit('address-details', {
-            formatted_address: selectedAddress.value,
-            city: '',
-            district: '',
-            postal_code: '',
-        });
+        selectedAddress.value = props.pendingAddressLabel;
+        emit('update:address', '');
     }
-
-    nextTick(() => updateLayers(centerMap));
 }
 
-function reverseGeocode(latLng) {
-    if (!geocoder) {
-        applyPoint(latLng);
+async function fetchReverseGeocode(latLng, requestId) {
+    if (reverseGeocodeAbortController) {
+        reverseGeocodeAbortController.abort();
+    }
+
+    const cacheKey = `${latLng.lat.toFixed(5)},${latLng.lng.toFixed(5)}`;
+    const cachedDetails = reverseGeocodeCache.get(cacheKey);
+
+    if (cachedDetails) {
+        applyPoint(latLng, detailsFromReverseGeocode(cachedDetails, latLng), false);
         return;
     }
 
-    geocoder.reverse(latLng, map.getZoom(), (results) => {
-        applyPoint(latLng, results?.[0] ? detailsFromResult(results[0]) : null);
-    });
+    reverseGeocodeAbortController = new AbortController();
+
+    try {
+        const response = await axios.get(props.reverseGeocodeUrl, {
+            params: {
+                latitude: latLng.lat.toFixed(8),
+                longitude: latLng.lng.toFixed(8),
+            },
+            signal: reverseGeocodeAbortController.signal,
+            timeout: 5000,
+        });
+
+        if (requestId !== reverseGeocodeRequestId) {
+            return;
+        }
+
+        if (response.data?.formatted_address) {
+            reverseGeocodeCache.set(cacheKey, response.data);
+            applyPoint(latLng, detailsFromReverseGeocode(response.data, latLng), false);
+        }
+    } catch (error) {
+        if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+            return;
+        }
+
+        // Coordinate fallback remains visible when reverse geocoding is unavailable.
+    } finally {
+        if (requestId === reverseGeocodeRequestId) {
+            reverseGeocodeAbortController = null;
+        }
+    }
+}
+
+function reverseGeocode(latLng) {
+    const requestId = ++reverseGeocodeRequestId;
+
+    applyPoint(latLng);
+
+    if (props.reverseOnMove) {
+        fetchReverseGeocode(latLng, requestId);
+    }
 }
 
 function initMap() {
@@ -197,6 +269,10 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    if (reverseGeocodeAbortController) {
+        reverseGeocodeAbortController.abort();
+    }
+
     if (geocoderControl) {
         geocoderControl.remove();
     }

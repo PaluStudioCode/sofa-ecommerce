@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Menu, ShoppingCart, User, X } from '@lucide/vue';
+import { MapPin, Menu, ShoppingCart, User, X } from '@lucide/vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 
 const page = usePage();
@@ -19,6 +19,10 @@ const open = ref(false);
                     <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" class="inline-flex items-center gap-2 hover:text-neutral-text">
                         <ShoppingCart class="h-4 w-4" />
                         <span>Keranjang</span>
+                    </Link>
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" class="inline-flex items-center gap-2 hover:text-neutral-text">
+                        <MapPin class="h-4 w-4" />
+                        <span>Alamat</span>
                     </Link>
                     <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" class="hover:text-neutral-text">Riwayat Pesanan</Link>
                 </nav>
@@ -49,6 +53,7 @@ const open = ref(false);
                 <nav class="grid gap-2 text-sm font-medium text-neutral-muted">
                     <Link href="/catalog" class="rounded-md px-3 py-2 hover:bg-neutral-light">Katalog</Link>
                     <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" class="rounded-md px-3 py-2 hover:bg-neutral-light">Keranjang</Link>
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" class="rounded-md px-3 py-2 hover:bg-neutral-light">Alamat</Link>
                     <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" class="rounded-md px-3 py-2 hover:bg-neutral-light">Riwayat Pesanan</Link>
                     <Link v-if="page.props.auth.user" href="/profile" class="rounded-md px-3 py-2 hover:bg-neutral-light">Akun</Link>
                     <Link v-if="page.props.auth.user" :href="route('logout')" method="post" as="button" class="rounded-md px-3 py-2 text-left hover:bg-neutral-light">Logout</Link>

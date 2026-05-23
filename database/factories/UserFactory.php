@@ -51,11 +51,4 @@ class UserFactory extends Factory
             'role' => 'admin',
         ]);
     }
-
-    public function owner(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'role' => 'owner',
-        ]);
-    }
 }

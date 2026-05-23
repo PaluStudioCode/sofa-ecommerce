@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Shipment;
-use App\Services\Reports\BusinessReportService;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,24 +12,16 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly BusinessReportService $reports)
-    {
-    }
-
     public function __invoke(Request $request): Response
     {
-        $isOwner = $request->user()->role === 'owner';
-        $period = $this->reports->period([]);
-
         return Inertia::render('Dashboard', [
             'navigationGroups' => DashboardNavigation::forUser($request->user()),
             'breadcrumbs' => [
                 ['label' => 'Dashboard', 'href' => route('dashboard')],
             ],
             'role' => $request->user()->role,
-            'summary' => $isOwner ? $this->ownerSummary($period) : $this->summary(),
+            'summary' => $this->summary(),
             'recentOrders' => $this->recentOrders(),
-            'period' => $period,
         ]);
     }
 
@@ -38,16 +29,6 @@ class DashboardController extends Controller
     {
         return [
             'incoming_orders' => Order::query()->whereDate('created_at', today())->count(),
-            'pending_payments' => Payment::query()->where('status', 'pending')->count(),
-            'processing_orders' => Order::query()->where('order_status', 'diproses')->count(),
-            'active_shipments' => Shipment::query()->whereIn('status', ['dijadwalkan', 'dalam_pengiriman'])->count(),
-        ];
-    }
-
-    private function ownerSummary(array $period): array
-    {
-        return [
-            ...$this->reports->salesSummary($period),
             'pending_payments' => Payment::query()->where('status', 'pending')->count(),
             'processing_orders' => Order::query()->where('order_status', 'diproses')->count(),
             'active_shipments' => Shipment::query()->whereIn('status', ['dijadwalkan', 'dalam_pengiriman'])->count(),

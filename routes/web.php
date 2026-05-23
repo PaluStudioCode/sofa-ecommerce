@@ -15,12 +15,12 @@ use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CustomerAddressController;
 use App\Http\Controllers\CustomerOrderController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MapReverseGeocodeController;
 use App\Http\Controllers\MidtransCallbackController;
-use App\Http\Controllers\Owner\MonitoringController as OwnerMonitoringController;
-use App\Http\Controllers\Owner\ReportController as OwnerReportController;
 use App\Http\Controllers\PaymentAttemptController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -39,11 +39,18 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+Route::middleware(['auth', 'verified'])
+    ->get('/maps/reverse-geocode', MapReverseGeocodeController::class)
+    ->name('maps.reverse-geocode');
+
 Route::middleware(['auth', 'verified', 'role:customer'])->group(function () {
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::post('/cart', [CartController::class, 'store'])->name('cart.store');
     Route::patch('/cart/{cartItem}', [CartController::class, 'update'])->name('cart.update');
     Route::delete('/cart/{cartItem}', [CartController::class, 'destroy'])->name('cart.destroy');
+
+    Route::get('/address', [CustomerAddressController::class, 'edit'])->name('address.edit');
+    Route::post('/address', [CustomerAddressController::class, 'update'])->name('address.update');
 
     Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
     Route::post('/checkout/location', [CheckoutController::class, 'resolveLocation'])->name('checkout.location');
@@ -106,26 +113,6 @@ Route::middleware(['auth', 'verified'])
         Route::put('shipments/{order}', [ShipmentController::class, 'update'])
             ->middleware('permission:manage_shipments')
             ->name('shipments.update');
-    });
-
-Route::middleware(['auth', 'verified', 'permission:view_reports'])
-    ->prefix('dashboard/reports')
-    ->name('owner.reports.')
-    ->group(function () {
-        Route::get('sales', [OwnerReportController::class, 'sales'])->name('sales');
-        Route::get('products', [OwnerReportController::class, 'products'])->name('products');
-        Route::get('vouchers', [OwnerReportController::class, 'vouchers'])->name('vouchers');
-        Route::get('shipping', [OwnerReportController::class, 'shipping'])->name('shipping');
-    });
-
-Route::middleware(['auth', 'verified', 'role:owner'])
-    ->prefix('dashboard/monitoring')
-    ->name('owner.monitoring.')
-    ->group(function () {
-        Route::get('orders', [OwnerMonitoringController::class, 'orders'])->name('orders');
-        Route::get('orders/{order}', [OwnerMonitoringController::class, 'orderShow'])->name('orders.show');
-        Route::get('payments', [OwnerMonitoringController::class, 'payments'])->name('payments');
-        Route::get('shipments', [OwnerMonitoringController::class, 'shipments'])->name('shipments');
     });
 
 require __DIR__.'/auth.php';

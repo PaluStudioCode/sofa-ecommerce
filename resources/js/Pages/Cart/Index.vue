@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ShoppingBag, Trash2 } from '@lucide/vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
@@ -7,13 +7,14 @@ import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import QuantityStepper from '@/Components/UI/QuantityStepper.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useConfirm } from '@/Composables/useFeedback';
 
 defineProps({
     items: { type: Array, default: () => [] },
     summary: { type: Object, required: true },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
 const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
 
 function formatRupiah(value) {
@@ -30,8 +31,13 @@ function updateQuantity(item, quantity) {
     });
 }
 
-function removeItem(item) {
-    if (window.confirm(`Hapus ${item.product_name} dari keranjang?`)) {
+async function removeItem(item) {
+    if (await confirm({
+        title: 'Hapus item?',
+        message: `${item.product_name} akan dihapus dari keranjang.`,
+        confirmText: 'Hapus',
+        tone: 'danger',
+    })) {
         router.delete(route('cart.destroy', item.id), {
             preserveScroll: true,
         });
@@ -54,13 +60,6 @@ function removeItem(item) {
                         <ShoppingBag class="h-4 w-4" />
                         Tambah Produk
                     </AppButton>
-                </div>
-
-                <div v-if="page.props.flash?.success" class="mb-4">
-                    <Alert tone="success">{{ page.props.flash.success }}</Alert>
-                </div>
-                <div v-if="page.props.flash?.error" class="mb-4">
-                    <Alert tone="danger">{{ page.props.flash.error }}</Alert>
                 </div>
 
                 <EmptyState v-if="items.length === 0" title="Keranjang masih kosong" message="Pilih sofa dari katalog untuk mulai checkout.">

@@ -4,22 +4,16 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
-use App\Services\Shipping\StoreRadiusOverlapService;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ShippingAreaController extends Controller
 {
-    public function __construct(
-        private readonly StoreRadiusOverlapService $overlaps,
-    ) {
-    }
-
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -36,19 +30,26 @@ class ShippingAreaController extends Controller
                 });
             })
             ->when(($filters['is_active'] ?? '') !== '', fn ($query) => $query->where('is_active', (bool) $filters['is_active']))
-            ->orderByDesc('priority')
+            ->orderByDesc('is_active')
             ->latest()
             ->paginate(12)
             ->withQueryString()
             ->through(fn (Store $area) => $this->payload($area));
 
+        $currentRule = Store::query()
+            ->where('is_active', true)
+            ->latest()
+            ->first()
+            ?? Store::query()->latest()->first();
+
         return Inertia::render('Admin/ShippingAreas/Index', [
             'navigationGroups' => DashboardNavigation::forUser($request->user()),
             'breadcrumbs' => [
                 ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Toko & Radius Layanan', 'href' => route('admin.shipping-areas.index')],
+                ['label' => 'Aturan Ongkir Radius', 'href' => route('admin.shipping-areas.index')],
             ],
             'areas' => $areas,
+            'currentRule' => $currentRule ? $this->payload($currentRule) : null,
             'filters' => [
                 'keyword' => $filters['keyword'] ?? '',
                 'is_active' => $filters['is_active'] ?? '',
@@ -63,16 +64,35 @@ class ShippingAreaController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Store::create($this->validatedData($request));
+        $data = $this->validatedData($request);
 
-        return back()->with('success', 'Toko dan radius layanan disimpan.');
+        DB::transaction(function () use ($data) {
+            if ($data['is_active']) {
+                Store::query()->where('is_active', true)->update(['is_active' => false]);
+            }
+
+            Store::create($data);
+        });
+
+        return back()->with('success', 'Aturan ongkir radius disimpan.');
     }
 
     public function update(Request $request, Store $shippingArea): RedirectResponse
     {
-        $shippingArea->update($this->validatedData($request, $shippingArea));
+        $data = $this->validatedData($request, $shippingArea);
 
-        return back()->with('success', 'Toko dan radius layanan diperbarui.');
+        DB::transaction(function () use ($shippingArea, $data) {
+            if ($data['is_active']) {
+                Store::query()
+                    ->whereKeyNot($shippingArea->id)
+                    ->where('is_active', true)
+                    ->update(['is_active' => false]);
+            }
+
+            $shippingArea->update($data);
+        });
+
+        return back()->with('success', 'Aturan ongkir radius diperbarui.');
     }
 
     public function destroy(Store $shippingArea): RedirectResponse
@@ -80,12 +100,12 @@ class ShippingAreaController extends Controller
         if ($shippingArea->orders()->exists()) {
             $shippingArea->update(['is_active' => false]);
 
-            return back()->with('success', 'Toko sudah pernah dipakai order, status diubah menjadi nonaktif.');
+            return back()->with('success', 'Aturan sudah pernah dipakai order, status diubah menjadi nonaktif.');
         }
 
         $shippingArea->delete();
 
-        return back()->with('success', 'Toko dan radius layanan dihapus.');
+        return back()->with('success', 'Aturan ongkir radius dihapus.');
     }
 
     private function validatedData(Request $request, ?Store $store = null): array
@@ -97,23 +117,15 @@ class ShippingAreaController extends Controller
             'longitude' => [$store ? 'nullable' : 'required', 'numeric', 'between:-180,180'],
             'radius_km' => ['required', 'numeric', 'gt:0', 'max:1000'],
             'shipping_cost' => ['required', 'numeric', 'min:0'],
-            'priority' => ['required', 'integer', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 
         $data['is_active'] = $request->boolean('is_active');
+        $data['priority'] = 0;
 
         if ($store && ! isset($data['latitude'], $data['longitude'])) {
             $data['latitude'] = (float) $store->latitude;
             $data['longitude'] = (float) $store->longitude;
-        }
-
-        $conflict = $this->overlaps->conflictingStore($data, $store?->id);
-
-        if ($conflict) {
-            throw ValidationException::withMessages([
-                'priority' => "Radius aktif overlap dengan {$conflict->name} yang memiliki priority sama.",
-            ]);
         }
 
         return $data;
@@ -129,7 +141,7 @@ class ShippingAreaController extends Controller
             'longitude' => (float) $area->longitude,
             'radius_km' => (float) $area->radius_km,
             'shipping_cost' => (float) $area->shipping_cost,
-            'priority' => $area->priority,
+            'shipping_cost_per_km' => (float) $area->shipping_cost,
             'is_active' => $area->is_active,
             'orders_count' => $area->orders_count ?? $area->orders()->count(),
             'center_summary' => number_format((float) $area->latitude, 5).', '.number_format((float) $area->longitude, 5),

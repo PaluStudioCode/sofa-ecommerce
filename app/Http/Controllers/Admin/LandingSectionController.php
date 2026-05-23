@@ -28,21 +28,13 @@ class LandingSectionController extends Controller
                 ['label' => 'Landing Page', 'href' => route('admin.landing-sections.index')],
             ],
             'sections' => $sections,
+            'sectionKeys' => $this->sectionKeys(),
         ]);
     }
 
-    public function create(): Response
+    public function create(): RedirectResponse
     {
-        return Inertia::render('Admin/LandingSections/Form', [
-            'navigationGroups' => DashboardNavigation::forUser(request()->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Landing Page', 'href' => route('admin.landing-sections.index')],
-                ['label' => 'Tambah', 'href' => route('admin.landing-sections.create')],
-            ],
-            'section' => null,
-            'sectionKeys' => $this->sectionKeys(),
-        ]);
+        return redirect()->route('admin.landing-sections.index');
     }
 
     public function store(LandingSectionRequest $request): RedirectResponse
@@ -61,18 +53,9 @@ class LandingSectionController extends Controller
         return redirect()->route('admin.landing-sections.index')->with('success', 'Section landing page disimpan.');
     }
 
-    public function edit(LandingSection $landingSection): Response
+    public function edit(LandingSection $landingSection): RedirectResponse
     {
-        return Inertia::render('Admin/LandingSections/Form', [
-            'navigationGroups' => DashboardNavigation::forUser(request()->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Landing Page', 'href' => route('admin.landing-sections.index')],
-                ['label' => 'Edit', 'href' => route('admin.landing-sections.edit', $landingSection)],
-            ],
-            'section' => $this->payload($landingSection),
-            'sectionKeys' => $this->sectionKeys(),
-        ]);
+        return redirect()->route('admin.landing-sections.index');
     }
 
     public function update(LandingSectionRequest $request, LandingSection $landingSection): RedirectResponse

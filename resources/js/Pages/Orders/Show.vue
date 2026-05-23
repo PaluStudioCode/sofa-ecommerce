@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, CreditCard, MapPin, PackageCheck, Truck, X } from '@lucide/vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
@@ -12,7 +12,6 @@ const props = defineProps({
     midtrans: { type: Object, default: () => ({}) },
 });
 
-const page = usePage();
 const paymentModalOpen = ref(false);
 const snapLoading = ref(false);
 const retryPaymentForm = useForm({ return_to: 'order' });
@@ -131,13 +130,6 @@ function createPaymentAttempt() {
                     </div>
                 </div>
 
-                <div v-if="page.props.flash?.success" class="mb-4">
-                    <Alert tone="success">{{ page.props.flash.success }}</Alert>
-                </div>
-                <div v-if="page.props.flash?.error" class="mb-4">
-                    <Alert tone="danger">{{ page.props.flash.error }}</Alert>
-                </div>
-
                 <Alert v-if="order.order_status === 'perlu_review_admin'" tone="warning" class="mb-5">
                     Pembayaran diterima, tetapi pesanan sedang dicek admin karena stok atau reserve perlu diverifikasi.
                 </Alert>
@@ -227,7 +219,7 @@ function createPaymentAttempt() {
                                     {{ [order.shipping_city, order.shipping_district, order.shipping_postal_code].filter(Boolean).join(', ') }}
                                 </p>
                                 <p v-if="order.shipping_note" class="rounded-md bg-neutral-light p-3 text-neutral-muted">{{ order.shipping_note }}</p>
-                                <p v-if="order.store" class="text-neutral-muted">Toko layanan: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
+                                <p v-if="order.store" class="text-neutral-muted">Titik asal pengiriman: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
                             </div>
                         </section>
                     </div>

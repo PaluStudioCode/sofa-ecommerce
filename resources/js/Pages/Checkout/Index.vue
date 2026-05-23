@@ -7,7 +7,6 @@ import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
-import LeafletLocationPicker from '@/Components/UI/LeafletLocationPicker.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import VoucherInput from '@/Components/UI/VoucherInput.vue';
 
@@ -25,15 +24,6 @@ const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?
 const paymentModalOpen = ref(false);
 const snapLoading = ref(false);
 
-const locationForm = useForm({
-    latitude: props.location?.latitude || '',
-    longitude: props.location?.longitude || '',
-    formatted_address: props.location?.formatted_address || '',
-    city: props.location?.city || '',
-    district: props.location?.district || '',
-    postal_code: props.location?.postal_code || '',
-});
-
 const quoteForm = useForm({
     voucher_code: props.voucherCode || '',
 });
@@ -46,6 +36,12 @@ const orderForm = useForm({
 const retryPaymentForm = useForm({});
 
 const canCreateOrder = computed(() => props.summary.can_submit && props.items.length > 0 && !props.createdOrder);
+const hasSavedAddress = computed(() => Boolean(props.location?.formatted_address)
+    && props.location?.latitude !== null
+    && props.location?.latitude !== undefined
+    && props.location?.longitude !== null
+    && props.location?.longitude !== undefined);
+const addressMeta = computed(() => [props.location?.district, props.location?.city, props.location?.postal_code].filter(Boolean).join(', '));
 const canOpenPendingPayment = computed(() => {
     if (props.createdOrder?.payment?.status !== 'pending' || !props.createdOrder.payment.snap_token) {
         return false;
@@ -67,17 +63,10 @@ function formatRupiah(value) {
     }).format(value || 0);
 }
 
-function resolveLocation() {
-    locationForm.post(route('checkout.location'), {
-        preserveScroll: true,
-    });
-}
-
-function syncAddressDetails(details) {
-    locationForm.formatted_address = details.formatted_address || locationForm.formatted_address;
-    locationForm.city = details.city || '';
-    locationForm.district = details.district || '';
-    locationForm.postal_code = details.postal_code || '';
+function formatKilometer(value) {
+    return new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 2,
+    }).format(value || 0);
 }
 
 function applyVoucher() {
@@ -188,13 +177,6 @@ onMounted(() => {
                     <AppButton href="/cart" variant="secondary">Kembali ke Keranjang</AppButton>
                 </div>
 
-                <div v-if="page.props.flash?.success" class="mb-4">
-                    <Alert tone="success">{{ page.props.flash.success }}</Alert>
-                </div>
-                <div v-if="page.props.flash?.error" class="mb-4">
-                    <Alert tone="danger">{{ page.props.flash.error }}</Alert>
-                </div>
-
                 <section v-if="createdOrder" class="mb-5 rounded-md border border-green-200 bg-green-50 p-5">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -276,35 +258,25 @@ onMounted(() => {
                             <div class="mt-4 grid gap-4">
                                 <FormInput id="customer_phone" v-model="orderForm.customer_phone" label="Nomor telepon" :error="orderForm.errors.customer_phone" required />
 
-                                <LeafletLocationPicker
-                                    v-model:latitude="locationForm.latitude"
-                                    v-model:longitude="locationForm.longitude"
-                                    v-model:address="locationForm.formatted_address"
-                                    title="Alamat Pengiriman"
-                                    marker-label="Alamat belum dipilih"
-                                    helper="Cari alamat atau klik titik pengiriman di peta."
-                                    search-placeholder="Cari alamat pengiriman"
-                                    :error="locationForm.errors.latitude || locationForm.errors.longitude || locationForm.errors.formatted_address || quoteForm.errors.location || orderForm.errors.location"
-                                    @address-details="syncAddressDetails"
-                                >
-                                    <template #actions>
-                                        <StatusBadge :status="location ? 'aktif' : 'pending'" :label="location ? 'Terpilih' : 'Belum dipilih'" />
-                                    </template>
-                                </LeafletLocationPicker>
-
-                                <div class="flex flex-wrap gap-2">
-                                    <AppButton type="button" :disabled="!locationForm.latitude || !locationForm.longitude || !locationForm.formatted_address" :loading="locationForm.processing" @click="resolveLocation">
-                                        <MapPin class="h-4 w-4" />
-                                        Gunakan Alamat Ini
-                                    </AppButton>
-                                </div>
-
-                                <div v-if="location" class="rounded-md bg-neutral-light p-3 text-sm text-neutral-muted">
-                                    <p class="font-semibold text-neutral-text">{{ location.formatted_address }}</p>
-                                    <p v-if="location.city || location.district || location.postal_code" class="mt-1">
-                                        {{ [location.city, location.district, location.postal_code].filter(Boolean).join(', ') }}
-                                    </p>
-                                </div>
+                                <section class="rounded-md border border-neutral-border bg-neutral-light p-4">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div class="flex items-start gap-3">
+                                            <MapPin class="mt-0.5 h-5 w-5 shrink-0 text-info" />
+                                            <div>
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <h3 class="text-base font-semibold text-neutral-text">Alamat pengiriman</h3>
+                                                    <StatusBadge :status="hasSavedAddress ? 'aktif' : 'pending'" :label="hasSavedAddress ? 'Tersimpan' : 'Belum diatur'" />
+                                                </div>
+                                                <p v-if="hasSavedAddress" class="mt-2 text-sm font-semibold text-neutral-text">{{ location.formatted_address }}</p>
+                                                <p v-if="hasSavedAddress && addressMeta" class="mt-1 text-sm text-neutral-muted">{{ addressMeta }}</p>
+                                                <p v-if="hasSavedAddress" class="mt-1 text-xs text-neutral-muted">{{ Number(location.latitude).toFixed(6) }}, {{ Number(location.longitude).toFixed(6) }}</p>
+                                                <p v-else class="mt-2 text-sm text-neutral-muted">Atur alamat pengiriman terlebih dahulu agar ongkir bisa dihitung.</p>
+                                            </div>
+                                        </div>
+                                        <AppButton href="/address" variant="secondary">{{ hasSavedAddress ? 'Ubah Alamat' : 'Atur Alamat' }}</AppButton>
+                                    </div>
+                                    <p v-if="quoteForm.errors.location || orderForm.errors.location" class="mt-3 text-sm text-danger">{{ quoteForm.errors.location || orderForm.errors.location }}</p>
+                                </section>
 
                                 <label class="block" for="shipping_note">
                                     <span class="text-sm font-medium text-neutral-text">Catatan alamat</span>
@@ -333,15 +305,27 @@ onMounted(() => {
                             </div>
                             <div class="flex justify-between gap-3">
                                 <span class="text-neutral-muted">Ongkir internal</span>
-                                <span class="font-semibold text-neutral-text">{{ summary.store ? formatRupiah(summary.shipping_cost) : 'Pilih alamat' }}</span>
+                                <span class="font-semibold text-neutral-text">{{ summary.store ? formatRupiah(summary.shipping_cost) : 'Atur alamat' }}</span>
                             </div>
                             <div v-if="summary.voucher" class="flex justify-between gap-3">
                                 <span class="text-neutral-muted">Voucher</span>
                                 <StatusBadge status="aktif" :label="summary.voucher.code" />
                             </div>
                             <div v-if="summary.store" class="flex justify-between gap-3">
-                                <span class="text-neutral-muted">Toko layanan</span>
+                                <span class="text-neutral-muted">Titik asal</span>
                                 <span class="text-right font-semibold text-neutral-text">{{ summary.store.name }}</span>
+                            </div>
+                            <div v-if="summary.store" class="flex justify-between gap-3">
+                                <span class="text-neutral-muted">Jarak alamat</span>
+                                <span class="text-right font-semibold text-neutral-text">{{ formatKilometer(summary.store.distance_km) }} km</span>
+                            </div>
+                            <div v-if="summary.store" class="flex justify-between gap-3">
+                                <span class="text-neutral-muted">Tarif per KM</span>
+                                <span class="text-right font-semibold text-neutral-text">{{ formatRupiah(summary.store.shipping_cost_per_km) }}/km</span>
+                            </div>
+                            <div v-if="summary.store" class="flex justify-between gap-3">
+                                <span class="text-neutral-muted">Perhitungan ongkir</span>
+                                <span class="text-right font-semibold text-neutral-text">{{ summary.store.billable_distance_km }} km x {{ formatRupiah(summary.store.shipping_cost_per_km) }}/km</span>
                             </div>
                             <div class="flex justify-between gap-3 border-t border-neutral-border pt-3 text-base">
                                 <span class="font-semibold text-neutral-text">Total</span>
@@ -350,7 +334,7 @@ onMounted(() => {
                         </div>
 
                         <Alert v-if="!summary.can_submit && !createdOrder" tone="warning" class="mt-4">
-                            Pilih alamat yang masuk area layanan sebelum membuat pesanan.
+                            Atur alamat pengiriman yang masuk area layanan sebelum membuat pesanan.
                         </Alert>
                         <Alert v-if="orderForm.errors.cart" tone="danger" class="mt-4">{{ orderForm.errors.cart }}</Alert>
 

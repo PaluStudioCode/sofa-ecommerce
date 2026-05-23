@@ -13,8 +13,6 @@ import {
     MapPinned,
     Menu,
     PackageCheck,
-    PanelTop,
-    ShieldCheck,
     ShoppingBag,
     Sofa,
     Tags,
@@ -54,6 +52,21 @@ const menuGroups = computed(() => groups.value
     }))
     .filter((group) => group.items.length > 0)
 );
+const menuEntries = computed(() => menuGroups.value.map((group) => {
+    if (group.items.length === 1) {
+        return {
+            type: 'item',
+            key: group.label,
+            item: group.items[0],
+        };
+    }
+
+    return {
+        type: 'group',
+        key: group.label,
+        group,
+    };
+}));
 
 const iconMap = {
     Boxes,
@@ -66,8 +79,6 @@ const iconMap = {
     MapPinned,
     Menu,
     PackageCheck,
-    PanelTop,
-    ShieldCheck,
     ShoppingBag,
     Sofa,
     Tags,
@@ -135,23 +146,34 @@ function toggleGroup(group, index) {
                     <span class="truncate">{{ dashboardItem.label }}</span>
                 </Link>
 
-                <div v-for="(group, index) in menuGroups" :key="group.label" class="mb-3">
-                    <button
-                        type="button"
-                        class="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-normal text-neutral-muted hover:bg-neutral-light hover:text-neutral-text"
-                        :aria-expanded="isGroupOpen(group, index)"
-                        @click="toggleGroup(group, index)"
+                <template v-for="(entry, index) in menuEntries" :key="entry.key">
+                    <Link
+                        v-if="entry.type === 'item'"
+                        :href="entry.item.href"
+                        class="mb-3 flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold"
+                        :class="isActive(entry.item) ? 'bg-primary-soft text-neutral-text' : 'text-neutral-muted hover:bg-neutral-light hover:text-neutral-text'"
                     >
-                        <span class="truncate">{{ group.label }}</span>
-                        <ChevronDown
-                            class="h-4 w-4 shrink-0 transition"
-                            :class="isGroupOpen(group, index) ? 'rotate-180' : ''"
-                        />
-                    </button>
+                        <component :is="iconFor(entry.item.icon)" class="h-4 w-4 shrink-0" />
+                        <span class="truncate">{{ entry.item.label }}</span>
+                    </Link>
 
-                    <div v-show="isGroupOpen(group, index)" class="mt-1 grid gap-1 border-l border-neutral-border/80 pl-4">
+                    <div v-else class="mb-3">
+                        <button
+                            type="button"
+                            class="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-normal text-neutral-muted hover:bg-neutral-light hover:text-neutral-text"
+                            :aria-expanded="isGroupOpen(entry.group, index)"
+                            @click="toggleGroup(entry.group, index)"
+                        >
+                            <span class="truncate">{{ entry.group.label }}</span>
+                            <ChevronDown
+                                class="h-4 w-4 shrink-0 transition"
+                                :class="isGroupOpen(entry.group, index) ? 'rotate-180' : ''"
+                            />
+                        </button>
+
+                        <div v-show="isGroupOpen(entry.group, index)" class="mt-1 grid gap-1 border-l border-neutral-border/80 pl-4">
                         <Link
-                            v-for="item in group.items"
+                            v-for="item in entry.group.items"
                             :key="item.label"
                             :href="item.href"
                             class="flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold"
@@ -160,8 +182,9 @@ function toggleGroup(group, index) {
                             <component :is="iconFor(item.icon)" class="h-4 w-4 shrink-0" />
                             <span class="truncate">{{ item.label }}</span>
                         </Link>
+                        </div>
                     </div>
-                </div>
+                </template>
             </nav>
         </aside>
 

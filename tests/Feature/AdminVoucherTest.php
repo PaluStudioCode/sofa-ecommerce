@@ -211,12 +211,7 @@ class AdminVoucherTest extends TestCase
 
     public function test_voucher_management_is_admin_only(): void
     {
-        $owner = User::factory()->owner()->create();
         $customer = User::factory()->create();
-
-        $this->actingAs($owner)
-            ->get(route('admin.vouchers.index'))
-            ->assertForbidden();
 
         $this->actingAs($customer)
             ->get(route('admin.vouchers.index'))

@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'roles' => ['customer', 'admin', 'owner'],
+    'roles' => ['customer', 'admin'],
 
     'permissions' => [
         'view_dashboard',
@@ -14,7 +14,6 @@ return [
         'manage_shipping_areas',
         'manage_shipments',
         'manage_landing_content',
-        'view_reports',
         'view_sensitive_customer_data',
         'manage_users',
     ],
@@ -33,15 +32,8 @@ return [
             'manage_shipping_areas',
             'manage_shipments',
             'manage_landing_content',
-            'view_reports',
             'view_sensitive_customer_data',
             'manage_users',
-        ],
-
-        'owner' => [
-            'view_dashboard',
-            'view_reports',
-            'view_sensitive_customer_data',
         ],
     ],
 ];

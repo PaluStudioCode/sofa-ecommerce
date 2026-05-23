@@ -47,7 +47,7 @@ class DatabaseFoundationTest extends TestCase
             $this->assertTrue(Schema::hasTable($table), "Missing table [{$table}].");
         }
 
-        $this->assertTrue(Schema::hasColumns('users', ['phone', 'role', 'deleted_at']));
+        $this->assertTrue(Schema::hasColumns('users', ['phone', 'role', 'shipping_address', 'shipping_latitude', 'shipping_longitude', 'deleted_at']));
         $this->assertTrue(Schema::hasColumns('orders', ['shipping_latitude', 'shipping_longitude', 'subtotal_amount', 'discount_amount', 'shipping_cost', 'total_amount']));
         $this->assertTrue(Schema::hasColumns('payments', ['attempt_number', 'midtrans_order_id', 'snap_token', 'raw_response']));
     }

@@ -119,10 +119,6 @@ class LandingPageTest extends TestCase
             ->get(route('admin.landing-sections.index'))
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->owner()->create())
-            ->get(route('admin.landing-sections.index'))
-            ->assertForbidden();
-
         $this->actingAs(User::factory()->admin()->create())
             ->get(route('admin.landing-sections.index'))
             ->assertOk();

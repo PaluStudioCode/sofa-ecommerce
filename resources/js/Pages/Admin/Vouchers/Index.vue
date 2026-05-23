@@ -7,8 +7,11 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useFeedback';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Trash2 } from '@lucide/vue';
+import VoucherFormModal from './VoucherFormModal.vue';
+import { ref } from 'vue';
 
 const props = defineProps({
     navigationGroups: { type: Array, default: () => [] },
@@ -17,9 +20,13 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
     statusOptions: { type: Array, default: () => [] },
     discountTypeOptions: { type: Array, default: () => [] },
+    formStatusOptions: { type: Array, default: () => [] },
+    formDiscountTypeOptions: { type: Array, default: () => [] },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
+const formModalOpen = ref(false);
+const selectedVoucher = ref(null);
 const form = useForm({
     keyword: props.filters.keyword || '',
     status: props.filters.status || '',
@@ -38,6 +45,16 @@ const columns = [
 
 function submit() {
     form.get(route('admin.vouchers.index'), { preserveState: true, replace: true });
+}
+
+function openCreateModal() {
+    selectedVoucher.value = null;
+    formModalOpen.value = true;
+}
+
+function openEditModal(voucher) {
+    selectedVoucher.value = voucher;
+    formModalOpen.value = true;
 }
 
 function formatRupiah(value) {
@@ -69,8 +86,13 @@ function usageLabel(voucher) {
     return `${voucher.used_count}${voucher.quota === null ? '' : ` / ${voucher.quota}`}`;
 }
 
-function destroyVoucher(voucher) {
-    if (window.confirm(`Hapus atau nonaktifkan voucher ${voucher.code}?`)) {
+async function destroyVoucher(voucher) {
+    if (await confirm({
+        title: 'Hapus voucher?',
+        message: `Voucher ${voucher.code} akan dihapus atau dinonaktifkan jika sudah dipakai.`,
+        confirmText: 'Hapus',
+        tone: 'danger',
+    })) {
         router.delete(route('admin.vouchers.destroy', voucher.id));
     }
 }
@@ -84,10 +106,8 @@ function destroyVoucher(voucher) {
             <div>
                 <h2 class="text-xl font-semibold text-neutral-text">Manajemen voucher</h2>
                 <p class="mt-1 text-sm text-neutral-muted">Pantau promo, kuota, status, dan penggunaan voucher checkout.</p>
-                <p v-if="page.props.flash?.success" class="mt-1 text-sm text-success">{{ page.props.flash.success }}</p>
-                <p v-if="page.props.flash?.error" class="mt-1 text-sm text-danger">{{ page.props.flash.error }}</p>
             </div>
-            <AppButton :href="route('admin.vouchers.create')">
+            <AppButton type="button" @click="openCreateModal">
                 <Plus class="h-4 w-4" />
                 Tambah Voucher
             </AppButton>
@@ -126,10 +146,10 @@ function destroyVoucher(voucher) {
             <template #cell-status="{ value }"><StatusBadge :status="value" /></template>
             <template #actions="{ row }">
                 <div class="flex justify-end gap-2">
-                    <Link :href="route('admin.vouchers.edit', row.id)" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light">
+                    <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="openEditModal(row)">
                         <Edit class="h-4 w-4" />
                         <span class="sr-only">Edit</span>
-                    </Link>
+                    </button>
                     <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="destroyVoucher(row)">
                         <Trash2 class="h-4 w-4" />
                         <span class="sr-only">Hapus</span>
@@ -142,5 +162,13 @@ function destroyVoucher(voucher) {
         </DataTable>
 
         <Pagination class="mt-4" :links="vouchers.links" />
+
+        <VoucherFormModal
+            :show="formModalOpen"
+            :voucher="selectedVoucher"
+            :status-options="formStatusOptions"
+            :discount-type-options="formDiscountTypeOptions"
+            @close="formModalOpen = false"
+        />
     </AuthenticatedLayout>
 </template>

@@ -199,15 +199,11 @@ class CatalogAndProductManagementTest extends TestCase
             ->assertSessionHasErrors('image');
     }
 
-    public function test_admin_product_management_is_forbidden_for_customer_and_owner(): void
+    public function test_admin_product_management_is_forbidden_for_customer(): void
     {
         $this->get(route('admin.products.index'))->assertRedirect('/login');
 
         $this->actingAs(User::factory()->create())
-            ->get(route('admin.products.index'))
-            ->assertForbidden();
-
-        $this->actingAs(User::factory()->owner()->create())
             ->get(route('admin.products.index'))
             ->assertForbidden();
 

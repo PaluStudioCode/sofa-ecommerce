@@ -1,13 +1,12 @@
 <script setup>
 import { computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import DataTable from '@/Components/UI/DataTable.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import MapPickerShell from '@/Components/UI/MapPickerShell.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { CreditCard, MapPinned, PackageCheck, Truck } from '@lucide/vue';
 
 const props = defineProps({
@@ -17,7 +16,6 @@ const props = defineProps({
     orderStatusOptions: { type: Array, default: () => [] },
 });
 
-const page = usePage();
 const statusForm = useForm({
     order_status: props.order.order_status,
 });
@@ -90,9 +88,6 @@ function rawPreview(raw) {
                 </div>
             </form>
         </div>
-
-        <Alert v-if="page.props.flash?.success" tone="success" class="mb-4">{{ page.props.flash.success }}</Alert>
-        <Alert v-if="page.props.flash?.error" tone="danger" class="mb-4">{{ page.props.flash.error }}</Alert>
 
         <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
             <div class="grid gap-5">
@@ -178,7 +173,7 @@ function rawPreview(raw) {
                         <p>{{ order.shipping_address }}</p>
                         <p>{{ [order.shipping_city, order.shipping_district, order.shipping_postal_code].filter(Boolean).join(', ') }}</p>
                         <p v-if="order.shipping_note" class="rounded-md bg-neutral-light p-3">{{ order.shipping_note }}</p>
-                        <p v-if="order.store">Toko layanan: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
+                        <p v-if="order.store">Titik asal pengiriman: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
                     </div>
                 </section>
 

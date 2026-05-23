@@ -76,7 +76,7 @@ class DomainRuleTest extends TestCase
         $this->assertSame('failed', $gateway->mapTransactionStatus('failure'));
     }
 
-    public function test_haversine_distance_supports_radius_priority_rules(): void
+    public function test_haversine_distance_supports_shipping_radius_rules(): void
     {
         $nearDistance = GeoDistance::haversineMeters(-6.2, 106.816666, -6.2005, 106.816666);
         $farDistance = GeoDistance::haversineMeters(-6.2, 106.816666, -7.2, 107.816666);

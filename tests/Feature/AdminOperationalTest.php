@@ -85,18 +85,18 @@ class AdminOperationalTest extends TestCase
 
         $this->actingAs($admin)
             ->put(route('admin.users.update', $internal), [
-                'name' => 'Owner Monitoring',
-                'email' => 'owner-monitor@example.com',
+                'name' => 'Admin Monitoring',
+                'email' => 'admin-monitor@example.com',
                 'phone' => '089999999999',
-                'role' => 'owner',
+                'role' => 'admin',
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('users', [
             'id' => $internal->id,
-            'name' => 'Owner Monitoring',
-            'email' => 'owner-monitor@example.com',
-            'role' => 'owner',
+            'name' => 'Admin Monitoring',
+            'email' => 'admin-monitor@example.com',
+            'role' => 'admin',
         ]);
 
         $this->actingAs($admin)
@@ -109,7 +109,6 @@ class AdminOperationalTest extends TestCase
     public function test_admin_user_management_rejects_customer_creation_and_forbids_non_admin_roles(): void
     {
         $admin = User::factory()->admin()->create();
-        $owner = User::factory()->owner()->create();
         $customer = User::factory()->create();
 
         $this->actingAs($admin)
@@ -122,9 +121,15 @@ class AdminOperationalTest extends TestCase
             ])
             ->assertSessionHasErrors('role');
 
-        $this->actingAs($owner)
-            ->get(route('admin.users.index'))
-            ->assertForbidden();
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Akun Tidak Valid',
+                'email' => 'invalid-role@example.com',
+                'role' => 'owner',
+                'password' => 'password-baru',
+                'password_confirmation' => 'password-baru',
+            ])
+            ->assertSessionHasErrors('role');
 
         $this->actingAs($customer)
             ->get(route('admin.users.index'))

@@ -1,13 +1,15 @@
 <script setup>
 import { computed, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import DataTable from '@/Components/UI/DataTable.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useFeedback';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Star, Trash2, Upload } from '@lucide/vue';
 
 const props = defineProps({
@@ -18,7 +20,8 @@ const props = defineProps({
     variants: { type: Array, default: () => [] },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
+const formModalOpen = ref(false);
 const selectedProduct = ref('');
 const form = useForm({
     product_id: '',
@@ -39,14 +42,28 @@ const columns = [
 
 const variantOptions = computed(() => props.variants.filter((variant) => !variant.product_id || variant.product_id === Number(selectedProduct.value)));
 
+function openUploadModal() {
+    form.reset();
+    form.clearErrors();
+    selectedProduct.value = '';
+    formModalOpen.value = true;
+}
+
+function closeUploadModal() {
+    if (!form.processing) {
+        formModalOpen.value = false;
+        form.reset();
+        form.clearErrors();
+        selectedProduct.value = '';
+    }
+}
+
 function submit() {
     form.product_id = selectedProduct.value;
     form.post(route('admin.product-images.store'), {
         forceFormData: true,
-        onSuccess: () => {
-            form.reset();
-            selectedProduct.value = '';
-        },
+        preserveScroll: true,
+        onSuccess: closeUploadModal,
     });
 }
 
@@ -54,8 +71,13 @@ function setPrimary(image) {
     router.put(route('admin.product-images.primary', image.id));
 }
 
-function destroyImage(image) {
-    if (window.confirm(`Hapus gambar produk ${image.product_name}?`)) {
+async function destroyImage(image) {
+    if (await confirm({
+        title: 'Hapus gambar produk?',
+        message: `Gambar produk ${image.product_name} akan dihapus permanen.`,
+        confirmText: 'Hapus',
+        tone: 'danger',
+    })) {
         router.delete(route('admin.product-images.destroy', image.id));
     }
 }
@@ -65,38 +87,13 @@ function destroyImage(image) {
     <Head title="Gambar Produk" />
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Gambar Produk">
-        <div class="mb-4">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen gambar produk</h2>
-            <p v-if="page.props.flash?.success" class="mt-1 text-sm text-success">{{ page.props.flash.success }}</p>
-            <p v-if="page.props.flash?.error" class="mt-1 text-sm text-danger">{{ page.props.flash.error }}</p>
+            <AppButton type="button" @click="openUploadModal">
+                <Upload class="h-4 w-4" />
+                Upload Gambar
+            </AppButton>
         </div>
-
-        <form class="mb-5 rounded-md border border-neutral-border bg-white p-5" @submit.prevent="submit">
-            <div class="grid gap-4 md:grid-cols-2">
-                <FormSelect id="image_product_id" v-model="selectedProduct" label="Produk" :options="products" :error="form.errors.product_id" required />
-                <FormSelect id="image_variant_id" v-model="form.product_variant_id" label="Varian" :options="variantOptions" :error="form.errors.product_variant_id" />
-                <FormInput id="alt_text" v-model="form.alt_text" label="Alt Text" :error="form.errors.alt_text" />
-                <FormInput id="sort_order" v-model="form.sort_order" type="number" label="Urutan" :error="form.errors.sort_order" required />
-            </div>
-
-            <label class="mt-4 block" for="image">
-                <span class="text-sm font-medium text-neutral-text">File Gambar<span class="text-danger"> *</span></span>
-                <input id="image" type="file" accept="image/png,image/jpeg,image/webp" class="mt-1 block w-full rounded-md border border-neutral-border text-sm text-neutral-text file:mr-4 file:min-h-10 file:border-0 file:bg-neutral-light file:px-4 file:text-sm file:font-semibold" @input="form.image = $event.target.files[0]" />
-                <p v-if="form.errors.image" class="mt-1 text-sm text-danger">{{ form.errors.image }}</p>
-            </label>
-
-            <label class="mt-4 flex items-center gap-2 text-sm font-medium text-neutral-text">
-                <input v-model="form.is_primary" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
-                Jadikan gambar utama
-            </label>
-
-            <div class="mt-4">
-                <AppButton type="submit" :loading="form.processing">
-                    <Upload class="h-4 w-4" />
-                    Upload
-                </AppButton>
-            </div>
-        </form>
 
         <DataTable :columns="columns" :rows="images">
             <template #cell-url="{ row }">
@@ -121,5 +118,36 @@ function destroyImage(image) {
                 <EmptyState title="Belum ada gambar produk" />
             </template>
         </DataTable>
+
+        <Modal :show="formModalOpen" max-width="2xl" @close="closeUploadModal">
+            <form class="p-6" @submit.prevent="submit">
+                <div class="mb-5">
+                    <h2 class="text-lg font-semibold text-neutral-text">Upload Gambar Produk</h2>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <FormSelect id="image_product_id" v-model="selectedProduct" label="Produk" :options="products" :error="form.errors.product_id" required />
+                    <FormSelect id="image_variant_id" v-model="form.product_variant_id" label="Varian" :options="variantOptions" :error="form.errors.product_variant_id" />
+                    <FormInput id="image_alt_text" v-model="form.alt_text" label="Alt Text" :error="form.errors.alt_text" />
+                    <FormInput id="image_sort_order" v-model="form.sort_order" type="number" label="Urutan" :error="form.errors.sort_order" required />
+                </div>
+
+                <label class="mt-4 block" for="image_file">
+                    <span class="text-sm font-medium text-neutral-text">File Gambar<span class="text-danger"> *</span></span>
+                    <input id="image_file" type="file" accept="image/png,image/jpeg,image/webp" class="mt-1 block w-full rounded-md border border-neutral-border text-sm text-neutral-text file:mr-4 file:min-h-10 file:border-0 file:bg-neutral-light file:px-4 file:text-sm file:font-semibold" @input="form.image = $event.target.files[0]" />
+                    <p v-if="form.errors.image" class="mt-1 text-sm text-danger">{{ form.errors.image }}</p>
+                </label>
+
+                <label class="mt-4 flex items-center gap-2 text-sm font-medium text-neutral-text">
+                    <input v-model="form.is_primary" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
+                    Jadikan gambar utama
+                </label>
+
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <AppButton type="button" variant="secondary" @click="closeUploadModal">Batal</AppButton>
+                    <AppButton type="submit" :loading="form.processing">Upload</AppButton>
+                </div>
+            </form>
+        </Modal>
     </AuthenticatedLayout>
 </template>

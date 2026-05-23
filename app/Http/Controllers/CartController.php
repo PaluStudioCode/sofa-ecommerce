@@ -73,7 +73,7 @@ class CartController extends Controller
 
     public function update(Request $request, CartItem $cartItem): RedirectResponse
     {
-        $this->authorizeOwner($request, $cartItem);
+        $this->authorizeCartItemAccess($request, $cartItem);
 
         $data = $request->validate([
             'quantity' => ['required', 'integer', 'min:1'],
@@ -89,7 +89,7 @@ class CartController extends Controller
 
     public function destroy(Request $request, CartItem $cartItem): RedirectResponse
     {
-        $this->authorizeOwner($request, $cartItem);
+        $this->authorizeCartItemAccess($request, $cartItem);
 
         $cartItem->delete();
 
@@ -163,7 +163,7 @@ class CartController extends Controller
         }
     }
 
-    private function authorizeOwner(Request $request, CartItem $cartItem): void
+    private function authorizeCartItemAccess(Request $request, CartItem $cartItem): void
     {
         abort_unless($cartItem->user_id === $request->user()->id, 404);
     }

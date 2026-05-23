@@ -6,6 +6,7 @@ use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
 use App\Services\Midtrans\MidtransPaymentGateway;
@@ -34,7 +35,7 @@ class CheckoutController extends Controller
             return redirect()->route('cart.index')->with('error', 'Keranjang kosong. Pilih produk terlebih dahulu.');
         }
 
-        $location = $request->session()->get('checkout.location');
+        $location = $this->userShippingLocation($request->user()) ?? $request->session()->get('checkout.location');
         $voucherCode = $request->session()->get('checkout.voucher_code', '');
 
         $summary = $items->isEmpty()
@@ -66,7 +67,13 @@ class CheckoutController extends Controller
 
         $request->session()->put('checkout.location', $location);
 
-        return redirect()->route('checkout.index')->with('success', 'Lokasi pengiriman dipilih.');
+        $redirect = redirect()->route('checkout.index');
+
+        if ($request->boolean('auto_update')) {
+            return $redirect;
+        }
+
+        return $redirect->with('success', 'Lokasi pengiriman dipilih.');
     }
 
     public function quoteRequest(Request $request): RedirectResponse
@@ -81,11 +88,11 @@ class CheckoutController extends Controller
             return redirect()->route('cart.index')->with('error', 'Keranjang kosong. Pilih produk terlebih dahulu.');
         }
 
-        $location = $request->session()->get('checkout.location');
+        $location = $this->userShippingLocation($request->user()) ?? $request->session()->get('checkout.location');
 
         if (! $location) {
             throw ValidationException::withMessages([
-                'location' => 'Pilih alamat pengiriman dari peta terlebih dahulu.',
+                'location' => 'Atur alamat pengiriman terlebih dahulu.',
             ]);
         }
 
@@ -104,11 +111,11 @@ class CheckoutController extends Controller
             'voucher_code' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $location = $request->session()->get('checkout.location');
+        $location = $this->userShippingLocation($request->user()) ?? $request->session()->get('checkout.location');
 
         if (! $location) {
             throw ValidationException::withMessages([
-                'location' => 'Pilih alamat pengiriman dari peta terlebih dahulu.',
+                'location' => 'Atur alamat pengiriman terlebih dahulu.',
             ]);
         }
 
@@ -241,11 +248,11 @@ class CheckoutController extends Controller
             $subtotal += (float) $item->variant->price * $item->quantity;
         }
 
-        $store = $location ? $this->matchingStore((float) $location['latitude'], (float) $location['longitude']) : null;
+        $shippingRule = $location ? $this->matchingShippingRule((float) $location['latitude'], (float) $location['longitude']) : null;
 
-        if ($strict && ! $store) {
+        if ($strict && ! $shippingRule) {
             throw ValidationException::withMessages([
-                'location' => 'Alamat belum masuk wilayah layanan toko.',
+                'location' => 'Alamat belum masuk radius layanan pengiriman.',
             ]);
         }
 
@@ -253,7 +260,8 @@ class CheckoutController extends Controller
             ? $this->validVoucher($voucherCode, $subtotal, $userId, $lockVoucher)
             : null;
         $discount = $voucher ? $this->discountAmount($voucher, $subtotal) : 0.0;
-        $shippingCost = $store ? (float) $store->shipping_cost : 0.0;
+        $shippingCost = $shippingRule ? $shippingRule['shipping_cost'] : 0.0;
+        $store = $shippingRule['store'] ?? null;
 
         return [
             'subtotal' => $subtotal,
@@ -263,8 +271,10 @@ class CheckoutController extends Controller
             'store' => $store ? [
                 'id' => $store->id,
                 'name' => $store->name,
-                'shipping_cost' => (float) $store->shipping_cost,
-                'priority' => $store->priority,
+                'radius_km' => (float) $store->radius_km,
+                'shipping_cost_per_km' => (float) $store->shipping_cost,
+                'distance_km' => $shippingRule['distance_km'],
+                'billable_distance_km' => $shippingRule['billable_distance_km'],
             ] : null,
             'voucher' => $voucher ? [
                 'id' => $voucher->id,
@@ -292,23 +302,37 @@ class CheckoutController extends Controller
         }
     }
 
-    private function matchingStore(float $latitude, float $longitude): ?Store
+    private function matchingShippingRule(float $latitude, float $longitude): ?array
     {
-        return Store::query()
+        $store = Store::query()
             ->where('is_active', true)
-            ->get()
-            ->filter(function (Store $store) use ($latitude, $longitude) {
-                $distance = GeoDistance::haversineMeters(
-                    (float) $store->latitude,
-                    (float) $store->longitude,
-                    $latitude,
-                    $longitude
-                );
-
-                return $distance <= ((float) $store->radius_km * 1000);
-            })
-            ->sortByDesc('priority')
+            ->latest()
             ->first();
+
+        if (! $store) {
+            return null;
+        }
+
+        $distanceMeters = GeoDistance::haversineMeters(
+            (float) $store->latitude,
+            (float) $store->longitude,
+            $latitude,
+            $longitude
+        );
+
+        if ($distanceMeters > ((float) $store->radius_km * 1000)) {
+            return null;
+        }
+
+        $distanceKm = $distanceMeters / 1000;
+        $billableDistanceKm = max(1, (int) round($distanceKm, 0, PHP_ROUND_HALF_UP));
+
+        return [
+            'store' => $store,
+            'distance_km' => round($distanceKm, 2),
+            'billable_distance_km' => $billableDistanceKm,
+            'shipping_cost' => $billableDistanceKm * (float) $store->shipping_cost,
+        ];
     }
 
     private function validVoucher(string $code, float $subtotal, int $userId, bool $lock): Voucher
@@ -374,6 +398,22 @@ class CheckoutController extends Controller
             'postal_code' => filled($data['postal_code'] ?? null) ? trim((string) $data['postal_code']) : null,
             'latitude' => (float) $data['latitude'],
             'longitude' => (float) $data['longitude'],
+        ];
+    }
+
+    private function userShippingLocation(User $user): ?array
+    {
+        if (! $user->shipping_address || $user->shipping_latitude === null || $user->shipping_longitude === null) {
+            return null;
+        }
+
+        return [
+            'formatted_address' => $user->shipping_address,
+            'city' => $user->shipping_city,
+            'district' => $user->shipping_district,
+            'postal_code' => $user->shipping_postal_code,
+            'latitude' => (float) $user->shipping_latitude,
+            'longitude' => (float) $user->shipping_longitude,
         ];
     }
 

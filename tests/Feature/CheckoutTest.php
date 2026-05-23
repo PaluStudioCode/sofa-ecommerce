@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -51,7 +53,7 @@ class CheckoutTest extends TestCase
             );
     }
 
-    public function test_checkout_quote_applies_voucher_and_highest_priority_store_radius(): void
+    public function test_checkout_quote_applies_voucher_and_active_shipping_radius_rule(): void
     {
         $customer = User::factory()->create();
         [$product, $variant] = $this->activeProductAndVariant(price: 2000000, stock: 5);
@@ -63,21 +65,11 @@ class CheckoutTest extends TestCase
         ]);
 
         Store::factory()->create([
-            'name' => 'Toko Prioritas Rendah',
-            'latitude' => -6.2,
-            'longitude' => 106.816666,
-            'radius_km' => 10,
-            'shipping_cost' => 150000,
-            'priority' => 1,
-            'is_active' => true,
-        ]);
-        Store::factory()->create([
-            'name' => 'Toko Prioritas Tinggi',
+            'name' => 'Toko Utama',
             'latitude' => -6.2,
             'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 75000,
-            'priority' => 9,
             'is_active' => true,
         ]);
 
@@ -92,9 +84,7 @@ class CheckoutTest extends TestCase
             'status' => 'aktif',
         ]);
 
-        $this->actingAs($customer)
-            ->post(route('checkout.location'), $this->locationPayload())
-            ->assertRedirect(route('checkout.index'));
+        $this->saveCustomerAddress($customer);
 
         $this->actingAs($customer)
             ->post(route('checkout.quote'), ['voucher_code' => 'HEMAT250'])
@@ -109,9 +99,54 @@ class CheckoutTest extends TestCase
                 ->where('summary.discount_amount', 250000)
                 ->where('summary.shipping_cost', 75000)
                 ->where('summary.total', 3825000)
-                ->where('summary.store.name', 'Toko Prioritas Tinggi')
+                ->where('summary.store.name', 'Toko Utama')
+                ->where('summary.store.shipping_cost_per_km', 75000)
+                ->where('summary.store.billable_distance_km', 1)
                 ->where('summary.voucher.code', 'HEMAT250')
                 ->where('summary.can_submit', true)
+            );
+    }
+
+    public function test_shipping_cost_uses_rounded_distance_times_rate_per_km(): void
+    {
+        $customer = User::factory()->create();
+        [$product, $variant] = $this->activeProductAndVariant(price: 1000000, stock: 3);
+        CartItem::factory()->create([
+            'user_id' => $customer->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+        ]);
+
+        Store::factory()->create([
+            'name' => 'Toko Utama',
+            'latitude' => -6.2,
+            'longitude' => 106.816666,
+            'radius_km' => 10,
+            'shipping_cost' => 20000,
+            'is_active' => true,
+        ]);
+
+        $this->saveCustomerAddress($customer, ['latitude' => -6.2378]);
+
+        $this->actingAs($customer)
+            ->get(route('checkout.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('summary.store.billable_distance_km', 4)
+                ->where('summary.shipping_cost', 80000)
+                ->where('summary.total', 1080000)
+            );
+
+        $this->saveCustomerAddress($customer, ['latitude' => -6.2414]);
+
+        $this->actingAs($customer->fresh())
+            ->get(route('checkout.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('summary.store.billable_distance_km', 5)
+                ->where('summary.shipping_cost', 100000)
+                ->where('summary.total', 1100000)
             );
     }
 
@@ -131,7 +166,6 @@ class CheckoutTest extends TestCase
             'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
-            'priority' => 3,
             'is_active' => true,
         ]);
         $voucher = Voucher::factory()->create([
@@ -145,9 +179,7 @@ class CheckoutTest extends TestCase
             'status' => 'aktif',
         ]);
 
-        $this->actingAs($customer)
-            ->post(route('checkout.location'), $this->locationPayload())
-            ->assertRedirect(route('checkout.index'));
+        $this->saveCustomerAddress($customer);
         $this->actingAs($customer)
             ->post(route('checkout.quote'), ['voucher_code' => 'SOFA300'])
             ->assertRedirect(route('checkout.index'));
@@ -193,6 +225,52 @@ class CheckoutTest extends TestCase
         $this->assertDatabaseMissing('cart_items', ['user_id' => $customer->id]);
     }
 
+    public function test_customer_can_manage_shipping_address_on_address_page(): void
+    {
+        $customer = User::factory()->create();
+
+        $this->actingAs($customer)
+            ->get(route('address.edit'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Address/Edit')
+                ->where('address', null)
+            );
+
+        $this->actingAs($customer)
+            ->post(route('address.update'), $this->locationPayload([
+                'latitude' => -0.915403,
+                'longitude' => 119.877033,
+                'formatted_address' => 'RT 02, RW 07, Tatua Selatan, Kecamatan Palu Selatan, Palu, Sulawesi Tengah, Indonesia',
+                'city' => 'Palu',
+                'district' => 'Tatua Selatan',
+                'postal_code' => '94236',
+            ]))
+            ->assertRedirect(route('address.edit'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $customer->id,
+            'shipping_address' => 'RT 02, RW 07, Tatua Selatan, Kecamatan Palu Selatan, Palu, Sulawesi Tengah, Indonesia',
+            'shipping_city' => 'Palu',
+            'shipping_district' => 'Tatua Selatan',
+            'shipping_postal_code' => '94236',
+            'shipping_latitude' => -0.915403,
+            'shipping_longitude' => 119.877033,
+        ]);
+
+        $this->actingAs($customer->fresh())
+            ->get(route('address.edit'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Address/Edit')
+                ->where('address.formatted_address', 'RT 02, RW 07, Tatua Selatan, Kecamatan Palu Selatan, Palu, Sulawesi Tengah, Indonesia')
+                ->where('address.city', 'Palu')
+                ->where('address.latitude', -0.915403)
+                ->where('address.longitude', 119.877033)
+            );
+    }
+
     public function test_checkout_validation_rejects_missing_phone_invalid_voucher_outside_area_and_stale_stock(): void
     {
         $customer = User::factory()->create();
@@ -209,13 +287,10 @@ class CheckoutTest extends TestCase
             'longitude' => 110.0,
             'radius_km' => 1,
             'shipping_cost' => 100000,
-            'priority' => 1,
             'is_active' => true,
         ]);
 
-        $this->actingAs($customer)
-            ->post(route('checkout.location'), $this->locationPayload())
-            ->assertRedirect(route('checkout.index'));
+        $this->saveCustomerAddress($customer);
 
         $this->actingAs($customer)
             ->post(route('checkout.quote'), ['voucher_code' => 'TIDAKADA'])
@@ -227,7 +302,6 @@ class CheckoutTest extends TestCase
             'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
-            'priority' => 1,
             'is_active' => true,
         ]);
 
@@ -252,6 +326,49 @@ class CheckoutTest extends TestCase
             ->assertSessionHasErrors('cart');
     }
 
+    public function test_reverse_geocode_route_proxies_address_lookup_through_backend(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'nominatim.openstreetmap.org/*' => Http::response([
+                'display_name' => 'Poboya, Kecamatan Mantikulore, Palu, Central Sulawesi, Sulawesi, 94118, Indonesia',
+                'address' => [
+                    'village' => 'Poboya',
+                    'district' => 'Kecamatan Mantikulore',
+                    'postcode' => '94118',
+                ],
+            ]),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('maps.reverse-geocode', [
+                'latitude' => -0.860163,
+                'longitude' => 119.918175,
+            ]))
+            ->assertOk()
+            ->assertJson([
+                'formatted_address' => 'Poboya, Kecamatan Mantikulore, Palu, Central Sulawesi, Sulawesi, 94118, Indonesia',
+                'city' => 'Poboya',
+                'district' => 'Kecamatan Mantikulore',
+                'postal_code' => '94118',
+            ]);
+
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://nominatim.openstreetmap.org/reverse')
+            && str_contains($request->url(), 'lat=-0.86016300')
+            && str_contains($request->url(), 'lon=119.91817500'));
+
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('maps.reverse-geocode', [
+                'latitude' => -0.860163,
+                'longitude' => 119.918175,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('city', 'Poboya');
+
+        Http::assertSentCount(1);
+    }
+
     private function locationPayload(array $overrides = []): array
     {
         return [
@@ -263,6 +380,22 @@ class CheckoutTest extends TestCase
             'postal_code' => '10110',
             ...$overrides,
         ];
+    }
+
+    private function saveCustomerAddress(User $customer, array $overrides = []): User
+    {
+        $payload = $this->locationPayload($overrides);
+
+        $customer->forceFill([
+            'shipping_address' => $payload['formatted_address'],
+            'shipping_city' => $payload['city'],
+            'shipping_district' => $payload['district'],
+            'shipping_postal_code' => $payload['postal_code'],
+            'shipping_latitude' => $payload['latitude'],
+            'shipping_longitude' => $payload['longitude'],
+        ])->save();
+
+        return $customer->refresh();
     }
 
     private function activeProductAndVariant(int $price, int $stock, int $reserved = 0): array

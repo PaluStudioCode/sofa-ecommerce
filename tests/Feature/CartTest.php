@@ -188,9 +188,5 @@ class CartTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())
             ->get(route('cart.index'))
             ->assertForbidden();
-
-        $this->actingAs(User::factory()->owner()->create())
-            ->get(route('cart.index'))
-            ->assertForbidden();
     }
 }

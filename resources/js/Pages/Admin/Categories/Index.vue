@@ -1,12 +1,14 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import DataTable from '@/Components/UI/DataTable.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useFeedback';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Trash2 } from '@lucide/vue';
 
 defineProps({
@@ -15,7 +17,8 @@ defineProps({
     categories: { type: Array, default: () => [] },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
+const formModalOpen = ref(false);
 const editingId = ref(null);
 const form = useForm({
     name: '',
@@ -31,12 +34,21 @@ const columns = [
     { key: 'is_active', label: 'Status' },
 ];
 
+const formTitle = computed(() => editingId.value ? 'Edit Kategori' : 'Tambah Kategori');
+
+function openCreateModal() {
+    reset();
+    formModalOpen.value = true;
+}
+
 function edit(category) {
     editingId.value = category.id;
     form.name = category.name;
     form.slug = category.slug;
     form.description = category.description || '';
     form.is_active = category.is_active;
+    form.clearErrors();
+    formModalOpen.value = true;
 }
 
 function reset() {
@@ -45,17 +57,34 @@ function reset() {
     form.clearErrors();
 }
 
+function closeModal() {
+    if (!form.processing) {
+        formModalOpen.value = false;
+        reset();
+    }
+}
+
 function submit() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeModal,
+    };
+
     if (editingId.value) {
-        form.put(route('admin.categories.update', editingId.value), { onSuccess: reset });
+        form.put(route('admin.categories.update', editingId.value), options);
         return;
     }
 
-    form.post(route('admin.categories.store'), { onSuccess: reset });
+    form.post(route('admin.categories.store'), options);
 }
 
-function destroyCategory(category) {
-    if (window.confirm(`Hapus kategori ${category.name}?`)) {
+async function destroyCategory(category) {
+    if (await confirm({
+        title: 'Hapus kategori?',
+        message: `Kategori ${category.name} akan dihapus jika belum dipakai produk.`,
+        confirmText: 'Hapus',
+        tone: 'danger',
+    })) {
         router.delete(route('admin.categories.destroy', category.id));
     }
 }
@@ -65,34 +94,13 @@ function destroyCategory(category) {
     <Head title="Kategori" />
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Kategori">
-        <div class="mb-4">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen kategori</h2>
-            <p v-if="page.props.flash?.success" class="mt-1 text-sm text-success">{{ page.props.flash.success }}</p>
-            <p v-if="page.props.flash?.error" class="mt-1 text-sm text-danger">{{ page.props.flash.error }}</p>
+            <AppButton type="button" @click="openCreateModal">
+                <Plus class="h-4 w-4" />
+                Tambah Kategori
+            </AppButton>
         </div>
-
-        <form class="mb-5 rounded-md border border-neutral-border bg-white p-5" @submit.prevent="submit">
-            <div class="grid gap-4 md:grid-cols-2">
-                <FormInput id="name" v-model="form.name" label="Nama Kategori" :error="form.errors.name" required />
-                <FormInput id="slug" v-model="form.slug" label="Slug" :error="form.errors.slug" placeholder="otomatis jika kosong" />
-                <label class="block md:col-span-2" for="description">
-                    <span class="text-sm font-medium text-neutral-text">Deskripsi</span>
-                    <textarea id="description" v-model="form.description" rows="3" class="mt-1 block w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" />
-                    <p v-if="form.errors.description" class="mt-1 text-sm text-danger">{{ form.errors.description }}</p>
-                </label>
-            </div>
-            <label class="mt-4 flex items-center gap-2 text-sm font-medium text-neutral-text">
-                <input v-model="form.is_active" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
-                Aktif
-            </label>
-            <div class="mt-4 flex gap-2">
-                <AppButton type="submit" :loading="form.processing">
-                    <Plus class="h-4 w-4" />
-                    {{ editingId ? 'Update' : 'Tambah' }}
-                </AppButton>
-                <AppButton v-if="editingId" type="button" variant="secondary" @click="reset">Batal</AppButton>
-            </div>
-        </form>
 
         <DataTable :columns="columns" :rows="categories">
             <template #cell-is_active="{ value }">
@@ -114,5 +122,31 @@ function destroyCategory(category) {
                 <EmptyState title="Belum ada kategori" />
             </template>
         </DataTable>
+
+        <Modal :show="formModalOpen" max-width="2xl" @close="closeModal">
+            <form class="p-6" @submit.prevent="submit">
+                <div class="mb-5">
+                    <h2 class="text-lg font-semibold text-neutral-text">{{ formTitle }}</h2>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <FormInput id="category_name" v-model="form.name" label="Nama Kategori" :error="form.errors.name" required />
+                    <FormInput id="category_slug" v-model="form.slug" label="Slug" :error="form.errors.slug" placeholder="otomatis jika kosong" />
+                    <label class="block md:col-span-2" for="category_description">
+                        <span class="text-sm font-medium text-neutral-text">Deskripsi</span>
+                        <textarea id="category_description" v-model="form.description" rows="3" class="mt-1 block w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" />
+                        <p v-if="form.errors.description" class="mt-1 text-sm text-danger">{{ form.errors.description }}</p>
+                    </label>
+                </div>
+                <label class="mt-4 flex items-center gap-2 text-sm font-medium text-neutral-text">
+                    <input v-model="form.is_active" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
+                    Aktif
+                </label>
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <AppButton type="button" variant="secondary" @click="closeModal">Batal</AppButton>
+                    <AppButton type="submit" :loading="form.processing">Simpan</AppButton>
+                </div>
+            </form>
+        </Modal>
     </AuthenticatedLayout>
 </template>

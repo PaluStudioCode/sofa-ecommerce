@@ -18,7 +18,7 @@ class UserController extends Controller
     {
         $filters = $request->validate([
             'keyword' => ['nullable', 'string', 'max:100'],
-            'role' => ['nullable', Rule::in(['customer', 'admin', 'owner'])],
+            'role' => ['nullable', Rule::in(['customer', 'admin'])],
         ]);
 
         $users = User::query()
@@ -58,7 +58,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
-            'role' => ['required', Rule::in(['admin', 'owner'])],
+            'role' => ['required', Rule::in(['admin'])],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
@@ -80,7 +80,7 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:30'],
-            'role' => ['required', Rule::in(['customer', 'admin', 'owner'])],
+            'role' => ['required', Rule::in(['customer', 'admin'])],
         ]);
 
         if ($user->is($request->user()) && $data['role'] !== 'admin') {
@@ -121,11 +121,10 @@ class UserController extends Controller
         $roles = collect([
             ['value' => 'customer', 'label' => 'Customer'],
             ['value' => 'admin', 'label' => 'Admin'],
-            ['value' => 'owner', 'label' => 'Owner'],
         ]);
 
         if (! $withAll) {
-            return $roles->whereIn('value', ['admin', 'owner'])->values()->all();
+            return $roles->where('value', 'admin')->values()->all();
         }
 
         return $roles->prepend(['value' => '', 'label' => 'Semua role'])->values()->all();

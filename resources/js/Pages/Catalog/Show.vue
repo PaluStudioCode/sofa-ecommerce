@@ -107,9 +107,6 @@ function addToCart() {
                             {{ cartForm.errors.product_id || cartForm.errors.product_variant_id || cartForm.errors.quantity }}
                         </Alert>
                     </div>
-                    <div v-if="page.props.flash?.success" class="mt-4">
-                        <Alert tone="success">{{ page.props.flash.success }}</Alert>
-                    </div>
                 </div>
             </div>
         </section>

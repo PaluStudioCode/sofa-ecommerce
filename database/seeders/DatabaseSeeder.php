@@ -35,6 +35,12 @@ class DatabaseSeeder extends Seeder
             'name' => 'Customer Demo',
             'phone' => '081234567890',
             'role' => 'customer',
+            'shipping_address' => 'Jl. Contoh Sofa No. 1, Jakarta Pusat, DKI Jakarta',
+            'shipping_city' => 'Jakarta Pusat',
+            'shipping_district' => 'Gambir',
+            'shipping_postal_code' => '10110',
+            'shipping_latitude' => -6.20000000,
+            'shipping_longitude' => 106.81666600,
             'password' => $password,
             'email_verified_at' => now(),
         ]);
@@ -43,14 +49,6 @@ class DatabaseSeeder extends Seeder
             'name' => 'Admin Demo',
             'phone' => '081234567891',
             'role' => 'admin',
-            'password' => $password,
-            'email_verified_at' => now(),
-        ]);
-
-        User::updateOrCreate(['email' => 'owner@sofa.test'], [
-            'name' => 'Owner Demo',
-            'phone' => '081234567892',
-            'role' => 'owner',
             'password' => $password,
             'email_verified_at' => now(),
         ]);
@@ -142,13 +140,13 @@ class DatabaseSeeder extends Seeder
             'status' => 'kedaluwarsa',
         ]);
 
-        $store = Store::updateOrCreate(['name' => 'Toko Jakarta Pusat Demo'], [
-            'description' => 'Titik toko dan radius layanan aktif untuk demo checkout.',
+        $store = Store::updateOrCreate(['name' => 'Toko Utama Demo'], [
+            'description' => 'Titik asal dan aturan ongkir radius aktif untuk demo checkout.',
             'latitude' => -6.20000000,
             'longitude' => 106.81666600,
             'radius_km' => 15,
-            'shipping_cost' => 150000,
-            'priority' => 10,
+            'shipping_cost' => 20000,
+            'priority' => 0,
             'is_active' => true,
         ]);
 
@@ -178,8 +176,8 @@ class DatabaseSeeder extends Seeder
             'shipping_note' => 'Rumah pagar hitam, hubungi sebelum datang.',
             'subtotal_amount' => 4500000,
             'discount_amount' => 250000,
-            'shipping_cost' => 150000,
-            'total_amount' => 4400000,
+            'shipping_cost' => 20000,
+            'total_amount' => 4270000,
             'order_status' => 'menunggu_pembayaran',
             'payment_status' => 'pending',
         ]);
@@ -215,7 +213,7 @@ class DatabaseSeeder extends Seeder
             'status' => 'pending',
             'transaction_status' => 'pending',
             'fraud_status' => null,
-            'gross_amount' => 4400000,
+            'gross_amount' => 4270000,
             'snap_token' => 'fake-snap-token-ord-demo-0001',
             'redirect_url' => null,
             'paid_at' => null,

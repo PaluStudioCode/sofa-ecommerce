@@ -14,54 +14,52 @@ class AdminShippingAndShipmentTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_admin_can_create_update_filter_and_delete_store_radius_from_map_coordinates(): void
+    public function test_admin_can_save_update_filter_and_delete_shipping_radius_rule_from_map_coordinates(): void
     {
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)
             ->post(route('admin.shipping-areas.store'), [
-                'name' => 'Jakarta Pusat',
-                'description' => 'Area operasional utama.',
+                'name' => 'Toko Utama',
+                'description' => 'Aturan ongkir utama.',
                 'latitude' => -6.2,
                 'longitude' => 106.816666,
                 'radius_km' => 8,
-                'shipping_cost' => 150000,
-                'priority' => 5,
+                'shipping_cost' => 20000,
                 'is_active' => true,
             ])
             ->assertRedirect();
 
-        $area = Store::where('name', 'Jakarta Pusat')->firstOrFail();
+        $area = Store::where('name', 'Toko Utama')->firstOrFail();
 
         $this->assertDatabaseHas('stores', [
             'id' => $area->id,
             'latitude' => -6.2,
             'longitude' => 106.816666,
             'radius_km' => 8,
-            'shipping_cost' => 150000,
-            'priority' => 5,
+            'shipping_cost' => 20000,
+            'priority' => 0,
             'is_active' => true,
         ]);
 
         $this->actingAs($admin)
             ->put(route('admin.shipping-areas.update', $area), [
-                'name' => 'Jakarta Pusat Update',
+                'name' => 'Toko Utama Update',
                 'description' => 'Catatan operasional update.',
                 'radius_km' => 9,
-                'shipping_cost' => 175000,
-                'priority' => 6,
+                'shipping_cost' => 25000,
                 'is_active' => false,
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('stores', [
             'id' => $area->id,
-            'name' => 'Jakarta Pusat Update',
+            'name' => 'Toko Utama Update',
             'latitude' => -6.2,
             'longitude' => 106.816666,
             'radius_km' => 9,
-            'shipping_cost' => 175000,
-            'priority' => 6,
+            'shipping_cost' => 25000,
+            'priority' => 0,
             'is_active' => false,
         ]);
 
@@ -71,7 +69,8 @@ class AdminShippingAndShipmentTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/ShippingAreas/Index')
                 ->has('areas.data', 1)
-                ->where('areas.data.0.name', 'Jakarta Pusat Update')
+                ->where('areas.data.0.name', 'Toko Utama Update')
+                ->where('areas.data.0.shipping_cost_per_km', 25000)
                 ->where('filters.is_active', '0')
                 ->missing('googleMaps')
             );
@@ -83,60 +82,45 @@ class AdminShippingAndShipmentTest extends TestCase
         $this->assertSoftDeleted('stores', ['id' => $area->id]);
     }
 
-    public function test_active_overlapping_store_radius_cannot_share_same_priority(): void
+    public function test_only_one_shipping_radius_rule_can_be_active(): void
     {
         $admin = User::factory()->admin()->create();
 
-        Store::factory()->create([
-            'name' => 'Area Utama',
+        $oldRule = Store::factory()->create([
+            'name' => 'Aturan Lama',
             'latitude' => -6.2,
             'longitude' => 106.816666,
             'radius_km' => 10,
-            'priority' => 9,
+            'shipping_cost' => 20000,
             'is_active' => true,
         ]);
 
         $this->actingAs($admin)
             ->post(route('admin.shipping-areas.store'), [
-                'name' => 'Area Bentrok',
+                'name' => 'Aturan Baru',
                 'description' => null,
                 'latitude' => -6.2005,
                 'longitude' => 106.816666,
                 'radius_km' => 3,
-                'shipping_cost' => 100000,
-                'priority' => 9,
+                'shipping_cost' => 25000,
                 'is_active' => true,
-            ])
-            ->assertSessionHasErrors('priority');
-
-        $this->actingAs($admin)
-            ->post(route('admin.shipping-areas.store'), [
-                'name' => 'Area Nonaktif',
-                'description' => null,
-                'latitude' => -6.2005,
-                'longitude' => 106.816666,
-                'radius_km' => 3,
-                'shipping_cost' => 100000,
-                'priority' => 9,
-                'is_active' => false,
             ])
             ->assertRedirect();
 
+        $this->assertFalse($oldRule->fresh()->is_active);
+
         $this->assertDatabaseHas('stores', [
-            'name' => 'Area Nonaktif',
-            'priority' => 9,
-            'is_active' => false,
+            'name' => 'Aturan Baru',
+            'shipping_cost' => 25000,
+            'is_active' => true,
         ]);
+
+        $this->assertSame(1, Store::where('is_active', true)->count());
     }
 
     public function test_shipping_area_management_is_admin_only(): void
     {
-        $owner = User::factory()->owner()->create();
         $customer = User::factory()->create();
-
-        $this->actingAs($owner)
-            ->get(route('admin.shipping-areas.index'))
-            ->assertForbidden();
 
         $this->actingAs($customer)
             ->get(route('admin.shipping-areas.index'))
@@ -269,12 +253,7 @@ class AdminShippingAndShipmentTest extends TestCase
 
     public function test_shipment_management_is_admin_only(): void
     {
-        $owner = User::factory()->owner()->create();
         $customer = User::factory()->create();
-
-        $this->actingAs($owner)
-            ->get(route('admin.shipments.index'))
-            ->assertForbidden();
 
         $this->actingAs($customer)
             ->get(route('admin.shipments.index'))

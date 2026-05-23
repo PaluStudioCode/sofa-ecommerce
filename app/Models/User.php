@@ -26,6 +26,12 @@ class User extends Authenticatable
         'email',
         'phone',
         'role',
+        'shipping_address',
+        'shipping_city',
+        'shipping_district',
+        'shipping_postal_code',
+        'shipping_latitude',
+        'shipping_longitude',
         'password',
     ];
 
@@ -49,6 +55,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'shipping_latitude' => 'float',
+            'shipping_longitude' => 'float',
         ];
     }
 
@@ -90,10 +98,5 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
-    }
-
-    public function isOwner(): bool
-    {
-        return $this->role === 'owner';
     }
 }

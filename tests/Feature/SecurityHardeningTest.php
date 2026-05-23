@@ -68,7 +68,6 @@ class SecurityHardeningTest extends TestCase
             'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 125000,
-            'priority' => 1,
             'is_active' => true,
         ]);
 
@@ -123,10 +122,9 @@ class SecurityHardeningTest extends TestCase
                 'longitude' => 106.816666,
                 'radius_km' => -1,
                 'shipping_cost' => -1,
-                'priority' => -1,
                 'is_active' => true,
             ])
-            ->assertSessionHasErrors(['radius_km', 'shipping_cost', 'priority']);
+            ->assertSessionHasErrors(['radius_km', 'shipping_cost']);
 
         $this->actingAs($admin)
             ->post(route('admin.variants.store'), [
@@ -189,7 +187,6 @@ class SecurityHardeningTest extends TestCase
         $customer = User::factory()->create();
         $otherCustomer = User::factory()->create();
         $admin = User::factory()->admin()->create();
-        $owner = User::factory()->owner()->create();
         $order = Order::factory()->for($otherCustomer)->create([
             'order_status' => 'menunggu_pembayaran',
             'payment_status' => 'pending',
@@ -207,7 +204,7 @@ class SecurityHardeningTest extends TestCase
             ->get(route('admin.products.index'))
             ->assertForbidden();
 
-        $this->actingAs($owner)
+        $this->actingAs($customer)
             ->post(route('admin.products.store'), [])
             ->assertForbidden();
 

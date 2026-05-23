@@ -47,22 +47,13 @@ class ProductController extends Controller
                 'status' => $filters['status'] ?? '',
             ],
             'categories' => $this->categoryOptions(),
+            'statuses' => $this->statusOptions(),
         ]);
     }
 
-    public function create(): Response
+    public function create(): RedirectResponse
     {
-        return Inertia::render('Admin/Products/Form', [
-            'navigationGroups' => DashboardNavigation::forUser(request()->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Produk', 'href' => route('admin.products.index')],
-                ['label' => 'Tambah', 'href' => route('admin.products.create')],
-            ],
-            'product' => null,
-            'categories' => $this->categoryOptions(),
-            'statuses' => $this->statusOptions(),
-        ]);
+        return redirect()->route('admin.products.index');
     }
 
     public function store(ProductRequest $request): RedirectResponse
@@ -72,12 +63,22 @@ class ProductController extends Controller
 
         $product = Product::create($data);
 
-        return redirect()->route('admin.products.edit', $product)->with('success', 'Produk disimpan.');
+        return redirect()->route('admin.products.index')->with('success', 'Produk disimpan.');
     }
 
     public function show(Product $product): Response
     {
-        $product->load(['category:id,name', 'images' => fn ($query) => $query->orderBy('sort_order'), 'variants']);
+        $product->load([
+            'category:id,name',
+            'images' => fn ($query) => $query
+                ->with('variant:id,variant_name,sku')
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order')
+                ->orderBy('id'),
+            'variants' => fn ($query) => $query
+                ->withCount('orderItems')
+                ->orderBy('id'),
+        ]);
         $product->loadCount(['variants', 'orderItems']);
 
         return Inertia::render('Admin/Products/Show', [
@@ -92,45 +93,43 @@ class ProductController extends Controller
                 'description' => $product->description,
                 'variants' => $product->variants->map(fn ($variant) => [
                     'id' => $variant->id,
+                    'product_id' => $variant->product_id,
                     'sku' => $variant->sku,
                     'variant_name' => $variant->variant_name,
+                    'size' => $variant->size,
+                    'material' => $variant->material,
+                    'color' => $variant->color,
                     'price' => (float) $variant->price,
                     'stock' => $variant->stock,
                     'reserved_stock' => $variant->reserved_stock,
+                    'available_stock' => $variant->availableStock(),
                     'status' => $variant->status,
+                    'order_items_count' => $variant->order_items_count,
                 ]),
                 'images' => $product->images->map(fn ($image) => [
                     'id' => $image->id,
+                    'product_id' => $image->product_id,
+                    'product_variant_id' => $image->product_variant_id,
+                    'variant_name' => $image->variant?->variant_name ?: $image->variant?->sku,
                     'url' => MediaUrl::fromPath($image->file_path),
                     'alt_text' => $image->alt_text,
                     'is_primary' => $image->is_primary,
                     'sort_order' => $image->sort_order,
                 ]),
             ],
+            'categories' => $this->categoryOptions(),
+            'statuses' => $this->statusOptions(),
+            'variantStatuses' => [
+                ['value' => 'aktif', 'label' => 'Aktif'],
+                ['value' => 'nonaktif', 'label' => 'Nonaktif'],
+                ['value' => 'stok_habis', 'label' => 'Stok habis'],
+            ],
         ]);
     }
 
-    public function edit(Product $product): Response
+    public function edit(Product $product): RedirectResponse
     {
-        return Inertia::render('Admin/Products/Form', [
-            'navigationGroups' => DashboardNavigation::forUser(request()->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Produk', 'href' => route('admin.products.index')],
-                ['label' => 'Edit', 'href' => route('admin.products.edit', $product)],
-            ],
-            'product' => [
-                'id' => $product->id,
-                'category_id' => $product->category_id,
-                'name' => $product->name,
-                'slug' => $product->slug,
-                'description' => $product->description,
-                'status' => $product->status,
-                'is_featured' => $product->is_featured,
-            ],
-            'categories' => $this->categoryOptions(),
-            'statuses' => $this->statusOptions(),
-        ]);
+        return redirect()->route('admin.products.index');
     }
 
     public function update(ProductRequest $request, Product $product): RedirectResponse
@@ -140,7 +139,7 @@ class ProductController extends Controller
 
         $product->update($data);
 
-        return redirect()->route('admin.products.index')->with('success', 'Produk diperbarui.');
+        return back()->with('success', 'Produk diperbarui.');
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -160,8 +159,10 @@ class ProductController extends Controller
 
         return [
             'id' => $product->id,
+            'category_id' => $product->category_id,
             'name' => $product->name,
             'slug' => $product->slug,
+            'description' => $product->description,
             'category' => $product->category?->name,
             'status' => $product->status,
             'is_featured' => $product->is_featured,

@@ -33,7 +33,6 @@ class PaymentAttemptTest extends TestCase
             'longitude' => 106.816666,
             'radius_km' => 10,
             'shipping_cost' => 100000,
-            'priority' => 3,
             'is_active' => true,
         ]);
 

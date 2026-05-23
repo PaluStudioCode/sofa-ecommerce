@@ -214,19 +214,10 @@ class AdminOrderPaymentTest extends TestCase
 
     public function test_order_and_payment_management_are_admin_only(): void
     {
-        $owner = User::factory()->owner()->create();
         $customer = User::factory()->create();
-
-        $this->actingAs($owner)
-            ->get(route('admin.orders.index'))
-            ->assertForbidden();
 
         $this->actingAs($customer)
             ->get(route('admin.orders.index'))
-            ->assertForbidden();
-
-        $this->actingAs($owner)
-            ->get(route('admin.payments.index'))
             ->assertForbidden();
 
         $this->actingAs($customer)

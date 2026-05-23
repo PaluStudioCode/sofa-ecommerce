@@ -59,22 +59,14 @@ class VoucherController extends Controller
             ],
             'statusOptions' => $this->statusOptions(true),
             'discountTypeOptions' => $this->discountTypeOptions(true),
+            'formStatusOptions' => $this->statusOptions(false),
+            'formDiscountTypeOptions' => $this->discountTypeOptions(false),
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request): RedirectResponse
     {
-        return Inertia::render('Admin/Vouchers/Form', [
-            'navigationGroups' => DashboardNavigation::forUser($request->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Voucher', 'href' => route('admin.vouchers.index')],
-                ['label' => 'Tambah', 'href' => route('admin.vouchers.create')],
-            ],
-            'voucher' => null,
-            'statusOptions' => $this->statusOptions(false),
-            'discountTypeOptions' => $this->discountTypeOptions(false),
-        ]);
+        return redirect()->route('admin.vouchers.index');
     }
 
     public function store(VoucherRequest $request): RedirectResponse
@@ -84,24 +76,12 @@ class VoucherController extends Controller
 
         $voucher = Voucher::create($data);
 
-        return redirect()->route('admin.vouchers.edit', $voucher)->with('success', 'Voucher disimpan.');
+        return redirect()->route('admin.vouchers.index')->with('success', 'Voucher disimpan.');
     }
 
-    public function edit(Request $request, Voucher $voucher): Response
+    public function edit(Request $request, Voucher $voucher): RedirectResponse
     {
-        $voucher = $this->statuses->sync($voucher);
-
-        return Inertia::render('Admin/Vouchers/Form', [
-            'navigationGroups' => DashboardNavigation::forUser($request->user()),
-            'breadcrumbs' => [
-                ['label' => 'Dashboard', 'href' => route('dashboard')],
-                ['label' => 'Voucher', 'href' => route('admin.vouchers.index')],
-                ['label' => 'Edit', 'href' => route('admin.vouchers.edit', $voucher)],
-            ],
-            'voucher' => $this->payload($voucher),
-            'statusOptions' => $this->statusOptions(false),
-            'discountTypeOptions' => $this->discountTypeOptions(false),
-        ]);
+        return redirect()->route('admin.vouchers.index');
     }
 
     public function update(VoucherRequest $request, Voucher $voucher): RedirectResponse

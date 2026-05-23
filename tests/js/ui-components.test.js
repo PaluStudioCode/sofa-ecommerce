@@ -149,6 +149,10 @@ describe('UI component suite', () => {
                         label: 'Penjualan',
                         items: [{ label: 'Pesanan', href: '/dashboard/orders', icon: 'ShoppingBag' }],
                     },
+                    {
+                        label: 'Pengguna',
+                        items: [{ label: 'Pengguna', href: '/dashboard/users', icon: 'Users' }],
+                    },
                 ],
             },
             slots: { default: '<p>Konten dashboard</p>' },
@@ -162,6 +166,8 @@ describe('UI component suite', () => {
         expect(wrapper.text()).toContain('Produk');
         expect(wrapper.text()).toContain('Daftar Produk');
         expect(wrapper.text()).toContain('Pesanan');
+        expect(wrapper.find('a[href="/dashboard/users"]').text()).toContain('Pengguna');
+        expect(wrapper.findAll('button').some((button) => button.text() === 'Pengguna')).toBe(false);
         expect(wrapper.text()).toContain('Admin Demo');
         expect(wrapper.text()).toContain('Konten dashboard');
     });

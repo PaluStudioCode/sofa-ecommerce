@@ -7,8 +7,11 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { useConfirm } from '@/Composables/useFeedback';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { Edit, Eye, Plus, Trash2 } from '@lucide/vue';
+import ProductFormModal from './ProductFormModal.vue';
+import { ref } from 'vue';
 
 const props = defineProps({
     navigationGroups: { type: Array, default: () => [] },
@@ -16,9 +19,12 @@ const props = defineProps({
     products: { type: Object, required: true },
     filters: { type: Object, default: () => ({}) },
     categories: { type: Array, default: () => [] },
+    statuses: { type: Array, default: () => [] },
 });
 
-const page = usePage();
+const { confirm } = useConfirm();
+const formModalOpen = ref(false);
+const selectedProduct = ref(null);
 const form = useForm({
     keyword: props.filters.keyword || '',
     category: props.filters.category || '',
@@ -43,8 +49,23 @@ function submit() {
     form.get(route('admin.products.index'), { preserveState: true, replace: true });
 }
 
-function destroyProduct(product) {
-    if (window.confirm(`Hapus produk ${product.name}?`)) {
+function openCreateModal() {
+    selectedProduct.value = null;
+    formModalOpen.value = true;
+}
+
+function openEditModal(product) {
+    selectedProduct.value = product;
+    formModalOpen.value = true;
+}
+
+async function destroyProduct(product) {
+    if (await confirm({
+        title: 'Hapus produk?',
+        message: `Produk ${product.name} akan dihapus jika belum memiliki data terkait.`,
+        confirmText: 'Hapus',
+        tone: 'danger',
+    })) {
         router.delete(route('admin.products.destroy', product.id));
     }
 }
@@ -57,10 +78,8 @@ function destroyProduct(product) {
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-neutral-text">Manajemen produk</h2>
-                <p v-if="page.props.flash?.success" class="mt-1 text-sm text-success">{{ page.props.flash.success }}</p>
-                <p v-if="page.props.flash?.error" class="mt-1 text-sm text-danger">{{ page.props.flash.error }}</p>
             </div>
-            <AppButton :href="route('admin.products.create')">
+            <AppButton type="button" @click="openCreateModal">
                 <Plus class="h-4 w-4" />
                 Tambah Produk
             </AppButton>
@@ -97,10 +116,10 @@ function destroyProduct(product) {
                         <Eye class="h-4 w-4" />
                         <span class="sr-only">Detail</span>
                     </Link>
-                    <Link :href="route('admin.products.edit', row.id)" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light">
+                    <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="openEditModal(row)">
                         <Edit class="h-4 w-4" />
                         <span class="sr-only">Edit</span>
-                    </Link>
+                    </button>
                     <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="destroyProduct(row)">
                         <Trash2 class="h-4 w-4" />
                         <span class="sr-only">Hapus</span>
@@ -113,5 +132,13 @@ function destroyProduct(product) {
         </DataTable>
 
         <Pagination class="mt-4" :links="products.links" />
+
+        <ProductFormModal
+            :show="formModalOpen"
+            :product="selectedProduct"
+            :categories="categories"
+            :statuses="statuses"
+            @close="formModalOpen = false"
+        />
     </AuthenticatedLayout>
 </template>

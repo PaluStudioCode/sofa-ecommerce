@@ -27,11 +27,10 @@ class FinalVerificationTest extends TestCase
 
         $this->assertTrue(Hash::check('password', User::where('email', 'customer@sofa.test')->firstOrFail()->password));
         $this->assertTrue(Hash::check('password', User::where('email', 'admin@sofa.test')->firstOrFail()->password));
-        $this->assertTrue(Hash::check('password', User::where('email', 'owner@sofa.test')->firstOrFail()->password));
 
         $this->assertDatabaseHas('users', ['email' => 'customer@sofa.test', 'role' => 'customer']);
         $this->assertDatabaseHas('users', ['email' => 'admin@sofa.test', 'role' => 'admin']);
-        $this->assertDatabaseHas('users', ['email' => 'owner@sofa.test', 'role' => 'owner']);
+        $this->assertDatabaseMissing('users', ['role' => 'owner']);
         $this->assertGreaterThanOrEqual(1, Category::count());
         $this->assertGreaterThanOrEqual(1, Product::where('status', 'aktif')->count());
         $this->assertGreaterThanOrEqual(1, Product::where('status', 'nonaktif')->count());
@@ -48,7 +47,7 @@ class FinalVerificationTest extends TestCase
         $this->assertGreaterThanOrEqual(1, Notification::where('event_type', 'order_created')->count());
     }
 
-    public function test_seeded_customer_admin_and_owner_can_login_to_expected_areas(): void
+    public function test_seeded_customer_and_admin_can_login_to_expected_areas(): void
     {
         $this->seed();
 
@@ -68,21 +67,14 @@ class FinalVerificationTest extends TestCase
         $this->assertAuthenticatedAs(User::where('email', 'admin@sofa.test')->firstOrFail());
         $this->post('/logout');
 
-        $this->post('/login', [
-            'email' => 'owner@sofa.test',
-            'password' => 'password',
-        ])
-            ->assertRedirect(route('dashboard', absolute: false));
-        $this->assertAuthenticatedAs(User::where('email', 'owner@sofa.test')->firstOrFail());
     }
 
-    public function test_final_seeded_public_customer_admin_and_owner_flows_are_reachable(): void
+    public function test_final_seeded_public_customer_and_admin_flows_are_reachable(): void
     {
         $this->seed();
 
         $customer = User::where('email', 'customer@sofa.test')->firstOrFail();
         $admin = User::where('email', 'admin@sofa.test')->firstOrFail();
-        $owner = User::where('email', 'owner@sofa.test')->firstOrFail();
         $product = Product::where('status', 'aktif')->firstOrFail();
         $order = Order::where('user_id', $customer->id)->firstOrFail();
 
@@ -112,17 +104,7 @@ class FinalVerificationTest extends TestCase
                 ->has('order.shipping_longitude')
             );
 
-        $this->actingAs($owner)
-            ->get(route('owner.monitoring.orders.show', $order))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Owner/Monitoring/OrderShow')
-                ->where('order.id', $order->id)
-                ->has('order.shipping_latitude')
-                ->has('order.shipping_longitude')
-            );
-
-        $this->actingAs($owner)
+        $this->actingAs($customer)
             ->post(route('admin.products.store'), [])
             ->assertForbidden();
     }
