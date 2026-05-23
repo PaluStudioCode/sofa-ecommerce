@@ -1,15 +1,12 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import Alert from '@/Components/UI/Alert.vue';
+import AppButton from '@/Components/UI/AppButton.vue';
+import FormInput from '@/Components/UI/FormInput.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 defineProps({
-    status: {
-        type: String,
-    },
+    status: { type: String },
 });
 
 const form = useForm({
@@ -23,46 +20,26 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Forgot Password" />
+        <Head title="Lupa Password" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            Forgot your password? No problem. Just let us know your email
-            address and we will email you a password reset link that will allow
-            you to choose a new one.
+        <div class="mb-6">
+            <p class="text-sm font-semibold text-info">SofaStore</p>
+            <h1 class="mt-2 text-2xl font-bold text-neutral-text">Reset password</h1>
+            <p class="mt-2 text-sm leading-6 text-neutral-muted">Masukkan email akun untuk menerima tautan reset password.</p>
         </div>
 
-        <div
-            v-if="status"
-            class="mb-4 text-sm font-medium text-green-600"
-        >
+        <Alert v-if="status" class="mb-4" tone="success">
             {{ status }}
-        </div>
+        </Alert>
 
-        <form @submit.prevent="submit">
-            <div>
-                <InputLabel for="email" value="Email" />
-
-                <TextInput
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    v-model="form.email"
-                    required
-                    autofocus
-                    autocomplete="username"
-                />
-
-                <InputError class="mt-2" :message="form.errors.email" />
-            </div>
-
-            <div class="mt-4 flex items-center justify-end">
-                <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Email Password Reset Link
-                </PrimaryButton>
-            </div>
+        <form class="grid gap-4" @submit.prevent="submit">
+            <FormInput id="email" v-model="form.email" type="email" label="Email" :error="form.errors.email" required />
+            <AppButton type="submit" class="w-full" :loading="form.processing">Kirim Tautan Reset</AppButton>
         </form>
+
+        <p class="mt-5 text-center text-sm text-neutral-muted">
+            Ingat password?
+            <Link :href="route('login')" class="font-semibold text-neutral-text hover:text-primary-hover">Masuk</Link>
+        </p>
     </GuestLayout>
 </template>

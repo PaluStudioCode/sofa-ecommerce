@@ -9,7 +9,6 @@ use App\Models\Store;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherUsage;
-use App\Services\Midtrans\MidtransPaymentGateway;
 use App\Services\Notifications\WhatsAppNotificationService;
 use App\Services\Payments\PaymentAttemptService;
 use App\Services\Vouchers\VoucherStatusService;
@@ -26,12 +25,11 @@ use Inertia\Response;
 
 class CheckoutController extends Controller
 {
-    public function index(Request $request, MidtransPaymentGateway $midtrans): Response|RedirectResponse
+    public function index(Request $request): Response|RedirectResponse
     {
-        $createdOrder = $this->createdOrder($request);
         $items = $this->cartItems($request);
 
-        if ($items->isEmpty() && ! $createdOrder) {
+        if ($items->isEmpty()) {
             return redirect()->route('cart.index')->with('error', 'Keranjang kosong. Pilih produk terlebih dahulu.');
         }
 
@@ -47,8 +45,6 @@ class CheckoutController extends Controller
             'summary' => $summary,
             'location' => $location,
             'voucherCode' => $voucherCode,
-            'midtrans' => $midtrans->clientConfig(),
-            'createdOrder' => $createdOrder,
         ]);
     }
 
@@ -206,8 +202,8 @@ class CheckoutController extends Controller
         $payments->createAttempt($order);
 
         return redirect()
-            ->route('checkout.index', ['order' => $order->id])
-            ->with('success', 'Pesanan dibuat dan menunggu pembayaran Midtrans.');
+            ->route('orders.show', ['order' => $order->id, 'new_order' => 1])
+            ->with('success', 'Pesanan dibuat. Silakan lanjutkan pembayaran.');
     }
 
     private function cartItems(Request $request): Collection
@@ -414,50 +410,6 @@ class CheckoutController extends Controller
             'postal_code' => $user->shipping_postal_code,
             'latitude' => (float) $user->shipping_latitude,
             'longitude' => (float) $user->shipping_longitude,
-        ];
-    }
-
-    private function createdOrder(Request $request): ?array
-    {
-        $orderId = $request->integer('order');
-
-        if (! $orderId) {
-            return null;
-        }
-
-        $order = Order::query()
-            ->with(['items', 'payments' => fn ($query) => $query->latest('attempt_number')])
-            ->where('user_id', $request->user()->id)
-            ->findOrFail($orderId);
-
-        $latestPayment = $order->payments->first();
-
-        return [
-            'id' => $order->id,
-            'order_number' => $order->order_number,
-            'total_amount' => (float) $order->total_amount,
-            'payment_status' => $order->payment_status,
-            'order_status' => $order->order_status,
-            'payment' => $latestPayment ? [
-                'id' => $latestPayment->id,
-                'attempt_number' => $latestPayment->attempt_number,
-                'midtrans_order_id' => $latestPayment->midtrans_order_id,
-                'status' => $latestPayment->status,
-                'transaction_status' => $latestPayment->transaction_status,
-                'gross_amount' => (float) $latestPayment->gross_amount,
-                'snap_token' => $latestPayment->snap_token,
-                'redirect_url' => $latestPayment->redirect_url,
-                'expired_at' => $latestPayment->expired_at?->toIso8601String(),
-            ] : null,
-            'can_create_payment_attempt' => ! $order->payments->contains('status', 'pending')
-                && ! $order->payments->contains('status', 'success')
-                && $order->order_status !== 'dibatalkan',
-            'items' => $order->items->map(fn ($item) => [
-                'product_name' => $item->product_name,
-                'variant_name' => $item->variant_name,
-                'quantity' => $item->quantity,
-                'subtotal' => (float) $item->subtotal,
-            ]),
         ];
     }
 

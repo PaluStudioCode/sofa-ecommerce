@@ -74,7 +74,6 @@ class CustomerOrderTest extends TestCase
                 ->where('order.items.0.product_name', 'Sofa Riwayat')
                 ->where('order.voucher.code', 'SOFAHEMAT')
                 ->where('order.payment.status', 'success')
-                ->where('order.payment.midtrans_order_id', $payment->midtrans_order_id)
                 ->where('order.shipment_status', 'dijadwalkan')
                 ->where('order.shipment_label', 'Dijadwalkan')
                 ->where('order.timeline.3.label', 'Pengiriman belum dijadwalkan')
@@ -88,8 +87,10 @@ class CustomerOrderTest extends TestCase
                 ->missing('order.shipping_latitude')
                 ->missing('order.shipping_longitude')
                 ->missing('order.payment.raw_response')
+                ->missing('order.payment.midtrans_order_id')
+                ->missing('order.payment.midtrans_transaction_id')
                 ->missing('order.payments.0.raw_response')
-                ->where('midtrans.clientKey', 'fake-client-key')
+                ->where('paymentGateway.clientKey', 'fake-client-key')
             );
 
         $this->assertSame(8, $variant->fresh()->stock);
@@ -143,7 +144,7 @@ class CustomerOrderTest extends TestCase
 
         $this->actingAs($customer)
             ->post(route('payments.store', $order), ['return_to' => 'order'])
-            ->assertRedirect(route('orders.show', ['order' => $order->id]));
+            ->assertRedirect(route('orders.show', ['order' => $order->id, 'payment_attempt' => 1]));
 
         $newPayment = $order->fresh()->payments()->latest('attempt_number')->firstOrFail();
 

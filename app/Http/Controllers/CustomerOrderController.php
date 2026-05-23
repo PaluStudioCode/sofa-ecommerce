@@ -39,7 +39,7 @@ class CustomerOrderController extends Controller
 
         return Inertia::render('Orders/Show', [
             'order' => $this->detailPayload($order),
-            'midtrans' => $midtrans->clientConfig(),
+            'paymentGateway' => $midtrans->clientConfig(),
         ]);
     }
 
@@ -143,12 +143,9 @@ class CustomerOrderController extends Controller
         return [
             'id' => $payment->id,
             'attempt_number' => $payment->attempt_number,
-            'midtrans_order_id' => $payment->midtrans_order_id,
-            'midtrans_transaction_id' => $payment->midtrans_transaction_id,
             'payment_type' => $payment->payment_type,
             'status' => $payment->status,
             'transaction_status' => $payment->transaction_status,
-            'fraud_status' => $payment->fraud_status,
             'gross_amount' => (float) $payment->gross_amount,
             'snap_token' => $payment->snap_token,
             'redirect_url' => $payment->redirect_url,
@@ -179,7 +176,7 @@ class CustomerOrderController extends Controller
                 $order->order_status === 'perlu_review_admin' ? 'Perlu review admin' : 'Pembayaran berhasil',
                 $order->order_status === 'perlu_review_admin'
                     ? 'Pembayaran diterima, stok atau order sedang dicek admin.'
-                    : ($order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran Midtrans.'),
+                    : ($order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran.'),
                 $paymentStepStatus
             ),
             $this->timelineItem('Pesanan diproses', 'Tim toko menyiapkan sofa.', in_array($order->order_status, ['diproses', 'dikirim', 'selesai'], true) ? 'completed' : 'pending'),

@@ -7,6 +7,7 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Eye } from '@lucide/vue';
 
@@ -34,9 +35,7 @@ const columns = [
     { key: 'created_at', label: 'Tanggal' },
 ];
 
-function submit() {
-    form.get(route('admin.payments.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(form, ['keyword', 'status', 'date_from', 'date_to'], 'admin.payments.index');
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -62,17 +61,13 @@ function formatDate(value) {
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pembayaran">
         <div class="mb-4">
             <h2 class="text-xl font-semibold text-neutral-text">Daftar pembayaran</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Payment attempt Midtrans ditampilkan untuk monitoring, bukan untuk membuat status sukses manual.</p>
         </div>
 
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_180px_150px_150px_auto]" @submit.prevent="submit">
+        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_180px_150px_150px]" @submit.prevent>
             <FormInput id="keyword" v-model="form.keyword" label="Keyword" placeholder="Order, customer, Midtrans ID" />
             <FormSelect id="status" v-model="form.status" label="Status" :options="statusOptions" />
             <FormInput id="date_from" v-model="form.date_from" type="date" label="Dari" :error="form.errors.date_from" />
             <FormInput id="date_to" v-model="form.date_to" type="date" label="Sampai" :error="form.errors.date_to" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
         </form>
 
         <DataTable :columns="columns" :rows="payments.data">

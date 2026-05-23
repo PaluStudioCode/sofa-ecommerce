@@ -1,13 +1,12 @@
 <script setup>
 import { computed } from 'vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
+import Alert from '@/Components/UI/Alert.vue';
+import AppButton from '@/Components/UI/AppButton.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
-    status: {
-        type: String,
-    },
+    status: { type: String },
 });
 
 const form = useForm({});
@@ -23,38 +22,25 @@ const verificationLinkSent = computed(
 
 <template>
     <GuestLayout>
-        <Head title="Email Verification" />
+        <Head title="Verifikasi Email" />
 
-        <div class="mb-4 text-sm text-gray-600">
-            Thanks for signing up! Before getting started, could you verify your
-            email address by clicking on the link we just emailed to you? If you
-            didn't receive the email, we will gladly send you another.
+        <div class="mb-6">
+            <p class="text-sm font-semibold text-info">SofaStore</p>
+            <h1 class="mt-2 text-2xl font-bold text-neutral-text">Verifikasi email</h1>
+            <p class="mt-2 text-sm leading-6 text-neutral-muted">Cek email Anda untuk menyelesaikan aktivasi akun.</p>
         </div>
 
-        <div
-            class="mb-4 text-sm font-medium text-green-600"
-            v-if="verificationLinkSent"
-        >
-            A new verification link has been sent to the email address you
-            provided during registration.
-        </div>
+        <Alert v-if="verificationLinkSent" class="mb-4" tone="success">
+            Tautan verifikasi baru sudah dikirim ke email yang terdaftar.
+        </Alert>
 
         <form @submit.prevent="submit">
-            <div class="mt-4 flex items-center justify-between">
-                <PrimaryButton
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Resend Verification Email
-                </PrimaryButton>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <AppButton type="submit" :loading="form.processing">Kirim Ulang Email</AppButton>
 
-                <Link
-                    :href="route('logout')"
-                    method="post"
-                    as="button"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >Log Out</Link
-                >
+                <Link :href="route('logout')" method="post" as="button" class="rounded-md px-3 py-2 text-sm font-semibold text-neutral-muted hover:bg-neutral-light hover:text-neutral-text">
+                    Logout
+                </Link>
             </div>
         </form>
     </GuestLayout>

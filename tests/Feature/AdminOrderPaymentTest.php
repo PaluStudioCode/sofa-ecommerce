@@ -150,7 +150,7 @@ class AdminOrderPaymentTest extends TestCase
         $this->assertSame('success', $secondReview->fresh()->payment_status);
     }
 
-    public function test_admin_can_filter_and_view_payment_detail_without_mutation_route(): void
+    public function test_payment_routes_redirect_to_unified_order_management(): void
     {
         $admin = User::factory()->admin()->create();
         $order = Order::factory()->paid()->create([
@@ -170,22 +170,24 @@ class AdminOrderPaymentTest extends TestCase
 
         $this->actingAs($admin)
             ->get(route('admin.payments.index', ['keyword' => 'Citra', 'status' => 'success']))
+            ->assertRedirect(route('admin.orders.index', [
+                'keyword' => 'Citra',
+                'payment_status' => 'success',
+            ]));
+
+        $this->actingAs($admin)
+            ->get(route('admin.orders.index', ['keyword' => 'MIDTRANS-PAY-001', 'payment_status' => 'success']))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/Payments/Index')
-                ->has('payments.data', 1)
-                ->where('payments.data.0.midtrans_order_id', 'MIDTRANS-PAY-001')
+                ->component('Admin/Orders/Index')
+                ->has('orders.data', 1)
+                ->where('orders.data.0.order_number', 'ORD-PAY-001')
+                ->where('orders.data.0.latest_payment.midtrans_order_id', 'MIDTRANS-PAY-001')
             );
 
         $this->actingAs($admin)
             ->get(route('admin.payments.show', $payment))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Admin/Payments/Show')
-                ->where('payment.raw_response_preview.order_id', 'MIDTRANS-PAY-001')
-                ->where('payment.raw_response_preview.payment_type', 'qris')
-                ->missing('payment.raw_response_preview.signature_key')
-            );
+            ->assertRedirect(route('admin.orders.show', $order));
 
         $this->actingAs($admin)
             ->put("/dashboard/payments/{$payment->id}", ['status' => 'success'])

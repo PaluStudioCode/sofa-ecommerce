@@ -29,6 +29,7 @@ const emit = defineEmits([
     'update:longitude',
     'update:address',
     'address-details',
+    'reverse-geocode-error',
 ]);
 
 const mapEl = ref(null);
@@ -42,7 +43,7 @@ let reverseGeocodeRequestId = 0;
 let reverseGeocodeAbortController = null;
 const reverseGeocodeCache = new Map();
 
-const fallbackCenter = [-6.2, 106.816666];
+const fallbackCenter = [-0.9003, 119.8780];
 const hasPoint = computed(() => Number.isFinite(toNumber(props.latitude)) && Number.isFinite(toNumber(props.longitude)));
 const coordinateLabel = computed(() => {
     if (!hasPoint.value) {
@@ -149,6 +150,15 @@ function detailsFromReverseGeocode(result, latLng) {
     };
 }
 
+function reverseGeocodeErrorPayload(error, latLng) {
+    return {
+        latitude: Number(latLng.lat.toFixed(8)),
+        longitude: Number(latLng.lng.toFixed(8)),
+        status: error.response?.status || null,
+        message: error.response?.data?.message || error.message || 'Reverse geocode failed',
+    };
+}
+
 function applyCoordinates(latLng, centerMap = true) {
     emit('update:latitude', Number(latLng.lat.toFixed(8)));
     emit('update:longitude', Number(latLng.lng.toFixed(8)));
@@ -205,6 +215,8 @@ async function fetchReverseGeocode(latLng, requestId) {
         if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
             return;
         }
+
+        emit('reverse-geocode-error', reverseGeocodeErrorPayload(error, latLng));
 
         // Coordinate fallback remains visible when reverse geocoding is unavailable.
     } finally {

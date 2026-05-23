@@ -48,6 +48,10 @@ function syncAddressDetails(details) {
     form.postal_code = details.postal_code || '';
 }
 
+function logMapError(error) {
+    console.error('Gagal memilih alamat dari maps.', error);
+}
+
 function saveAddress() {
     form.post(route('address.update'), {
         preserveScroll: true,
@@ -85,6 +89,7 @@ function saveAddress() {
                         search-placeholder="Cari alamat pengiriman"
                         :error="form.errors.latitude || form.errors.longitude || form.errors.formatted_address"
                         @address-details="syncAddressDetails"
+                        @reverse-geocode-error="logMapError"
                     >
                         <template #actions>
                             <StatusBadge :status="hasCompleteAddress ? 'aktif' : 'pending'" :label="statusLabel" />

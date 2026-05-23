@@ -9,6 +9,7 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Trash2 } from '@lucide/vue';
@@ -25,6 +26,7 @@ const props = defineProps({
 const { confirm } = useConfirm();
 const formModalOpen = ref(false);
 const editingId = ref(null);
+let closeResetTimer = null;
 const filterForm = useForm({
     keyword: props.filters.keyword || '',
     role: props.filters.role || '',
@@ -49,13 +51,16 @@ const columns = [
 const formTitle = computed(() => editingId.value ? 'Edit Pengguna' : 'Tambah Pengguna');
 
 function openCreateModal() {
+    if (closeResetTimer) {
+        window.clearTimeout(closeResetTimer);
+        closeResetTimer = null;
+    }
+
     resetForm();
     formModalOpen.value = true;
 }
 
-function submitFilter() {
-    filterForm.get(route('admin.users.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(filterForm, ['keyword', 'role'], 'admin.users.index');
 
 function resetForm() {
     editingId.value = null;
@@ -66,6 +71,11 @@ function resetForm() {
 }
 
 function edit(user) {
+    if (closeResetTimer) {
+        window.clearTimeout(closeResetTimer);
+        closeResetTimer = null;
+    }
+
     editingId.value = user.id;
     Object.assign(form, {
         name: user.name,
@@ -103,7 +113,15 @@ function submit() {
 function closeModal() {
     if (!form.processing) {
         formModalOpen.value = false;
-        resetForm();
+
+        if (closeResetTimer) {
+            window.clearTimeout(closeResetTimer);
+        }
+
+        closeResetTimer = window.setTimeout(() => {
+            resetForm();
+            closeResetTimer = null;
+        }, 220);
     }
 }
 
@@ -124,22 +142,16 @@ async function deactivate(user) {
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pengguna">
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="text-xl font-semibold text-neutral-text">Manajemen pengguna</h2>
-                <p class="mt-1 text-sm text-neutral-muted">Admin dapat membuat akun internal, mengubah role, dan menonaktifkan akun tanpa melihat password lama.</p>
-            </div>
+            <h2 class="text-xl font-semibold text-neutral-text">Manajemen pengguna</h2>
             <AppButton type="button" @click="openCreateModal">
                 <Plus class="h-4 w-4" />
                 Tambah Pengguna
             </AppButton>
         </div>
 
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_auto]" @submit.prevent="submitFilter">
+        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px]" @submit.prevent>
             <FormInput id="keyword" v-model="filterForm.keyword" label="Keyword" placeholder="Cari nama, email, atau telepon" />
             <FormSelect id="role" v-model="filterForm.role" label="Role" :options="roles" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
         </form>
 
         <DataTable :columns="columns" :rows="users.data">

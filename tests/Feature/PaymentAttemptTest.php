@@ -40,15 +40,16 @@ class PaymentAttemptTest extends TestCase
             ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->post(route('checkout.store'), [
                 'customer_phone' => '081234567890',
                 'shipping_note' => 'Blok A nomor 10',
-            ])
-            ->assertRedirect();
+            ]);
 
         $order = Order::with('payments')->firstOrFail();
         $payment = $order->payments->first();
+
+        $response->assertRedirect(route('orders.show', ['order' => $order->id, 'new_order' => 1]));
 
         $this->assertSame('pending', $payment->status);
         $this->assertSame(1, $payment->attempt_number);
@@ -57,16 +58,17 @@ class PaymentAttemptTest extends TestCase
         $this->assertSame('fake-snap-token-'.$payment->midtrans_order_id, $payment->snap_token);
 
         $this->actingAs($customer)
-            ->get(route('checkout.index', ['order' => $order->id]))
+            ->get(route('orders.show', $order))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Checkout/Index')
-                ->where('createdOrder.order_number', $order->order_number)
-                ->where('createdOrder.payment.status', 'pending')
-                ->where('createdOrder.payment.snap_token', $payment->snap_token)
-                ->where('createdOrder.can_create_payment_attempt', false)
-                ->where('midtrans.clientKey', 'fake-client-key')
-                ->missing('midtrans.serverKey')
+                ->component('Orders/Show')
+                ->where('order.order_number', $order->order_number)
+                ->where('order.payment.status', 'pending')
+                ->where('order.payment.snap_token', $payment->snap_token)
+                ->where('order.can_create_payment_attempt', false)
+                ->where('paymentGateway.clientKey', 'fake-client-key')
+                ->missing('paymentGateway.serverKey')
+                ->missing('order.payment.midtrans_order_id')
             );
     }
 
@@ -107,7 +109,7 @@ class PaymentAttemptTest extends TestCase
 
         $this->actingAs($customer)
             ->post(route('payments.store', $order))
-            ->assertRedirect(route('checkout.index', ['order' => $order->id]));
+            ->assertRedirect(route('orders.show', ['order' => $order->id, 'payment_attempt' => 1]));
 
         $latestPayment = $order->fresh()->payments()->latest('attempt_number')->firstOrFail();
 

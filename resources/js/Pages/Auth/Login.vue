@@ -1,19 +1,13 @@
 <script setup>
-import Checkbox from '@/Components/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
+import Alert from '@/Components/UI/Alert.vue';
+import AppButton from '@/Components/UI/AppButton.vue';
+import FormInput from '@/Components/UI/FormInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 defineProps({
-    canResetPassword: {
-        type: Boolean,
-    },
-    status: {
-        type: String,
-    },
+    canResetPassword: { type: Boolean },
+    status: { type: String },
 });
 
 const form = useForm({
@@ -31,70 +25,39 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Log in" />
+        <Head title="Login" />
 
-        <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
-            {{ status }}
+        <div class="mb-6">
+            <p class="text-sm font-semibold text-info">SofaStore</p>
+            <h1 class="mt-2 text-2xl font-bold text-neutral-text">Masuk akun</h1>
+            <p class="mt-2 text-sm leading-6 text-neutral-muted">Lanjutkan belanja, checkout, dan pantau pesanan sofa Anda.</p>
         </div>
 
-        <form @submit.prevent="submit">
-            <div>
-                <InputLabel for="email" value="Email" />
+        <Alert v-if="status" class="mb-4" tone="success">
+            {{ status }}
+        </Alert>
 
-                <TextInput
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    v-model="form.email"
-                    required
-                    autofocus
-                    autocomplete="username"
-                />
+        <form class="grid gap-4" @submit.prevent="submit">
+            <FormInput id="email" v-model="form.email" type="email" label="Email" :error="form.errors.email" required />
+            <FormInput id="password" v-model="form.password" type="password" label="Password" :error="form.errors.password" required />
 
-                <InputError class="mt-2" :message="form.errors.email" />
-            </div>
-
-            <div class="mt-4">
-                <InputLabel for="password" value="Password" />
-
-                <TextInput
-                    id="password"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password"
-                    required
-                    autocomplete="current-password"
-                />
-
-                <InputError class="mt-2" :message="form.errors.password" />
-            </div>
-
-            <div class="mt-4 block">
-                <label class="flex items-center">
-                    <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600"
-                        >Remember me</span
-                    >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <label class="flex items-center gap-2 text-sm font-medium text-neutral-text">
+                    <input v-model="form.remember" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
+                    Ingat saya
                 </label>
-            </div>
 
-            <div class="mt-4 flex items-center justify-end">
-                <Link
-                    v-if="canResetPassword"
-                    :href="route('password.request')"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                >
-                    Forgot your password?
+                <Link v-if="canResetPassword" :href="route('password.request')" class="text-sm font-semibold text-neutral-text hover:text-primary-hover">
+                    Lupa password?
                 </Link>
-
-                <PrimaryButton
-                    class="ms-4"
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Log in
-                </PrimaryButton>
             </div>
+
+            <AppButton type="submit" class="w-full" :loading="form.processing">Masuk</AppButton>
         </form>
+
+        <p class="mt-5 text-center text-sm text-neutral-muted">
+            Belum punya akun?
+            <Link :href="route('register')" class="font-semibold text-neutral-text hover:text-primary-hover">Daftar</Link>
+        </p>
     </GuestLayout>
 </template>

@@ -10,7 +10,7 @@ use Throwable;
 class WhatsAppNotificationService
 {
     private const EVENTS = [
-        'order_created' => 'Pesanan {order_number} berhasil dibuat. Total pembayaran {total}. Silakan lanjutkan pembayaran melalui Midtrans.',
+        'order_created' => 'Pesanan {order_number} berhasil dibuat. Total pembayaran {total}. Silakan lanjutkan pembayaran.',
         'payment_success' => 'Pembayaran pesanan {order_number} sudah berhasil diterima. Tim kami akan memproses pesanan Anda.',
         'order_processing' => 'Pesanan {order_number} sedang diproses oleh tim toko.',
         'order_shipped' => 'Pesanan {order_number} sedang dikirim oleh pengiriman internal toko.',

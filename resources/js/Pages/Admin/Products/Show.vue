@@ -164,7 +164,6 @@ async function destroyImage(image) {
             <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 class="text-lg font-semibold text-neutral-text">Varian & Stok</h3>
-                    <p class="mt-1 text-sm text-neutral-muted">Kelola SKU, harga, stok fisik, dan status untuk produk ini.</p>
                 </div>
                 <AppButton type="button" @click="openCreateVariant">
                     <Plus class="h-4 w-4" />
@@ -214,7 +213,6 @@ async function destroyImage(image) {
             <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 class="text-lg font-semibold text-neutral-text">Gambar Produk</h3>
-                    <p class="mt-1 text-sm text-neutral-muted">Kelola gambar utama, galeri, dan gambar per varian.</p>
                 </div>
                 <AppButton type="button" @click="imageModalOpen = true">
                     <ImagePlus class="h-4 w-4" />

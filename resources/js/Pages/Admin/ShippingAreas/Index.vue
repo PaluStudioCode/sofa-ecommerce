@@ -1,43 +1,36 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import DataTable from '@/Components/UI/DataTable.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
-import FormSelect from '@/Components/UI/FormSelect.vue';
 import LeafletLocationPicker from '@/Components/UI/LeafletLocationPicker.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Edit, Save, Trash2 } from '@lucide/vue';
+import { Edit, Plus, Save, Trash2 } from '@lucide/vue';
 
-const props = defineProps({
+defineProps({
     navigationGroups: { type: Array, default: () => [] },
     breadcrumbs: { type: Array, default: () => [] },
     areas: { type: Object, required: true },
-    currentRule: { type: Object, default: null },
-    filters: { type: Object, default: () => ({}) },
-    activeOptions: { type: Array, default: () => [] },
 });
 
 const { confirm } = useConfirm();
-const editingId = ref(props.currentRule?.id ?? null);
-
-const filterForm = useForm({
-    keyword: props.filters.keyword || '',
-    is_active: props.filters.is_active || '',
-});
+const editingId = ref(null);
+const formModalOpen = ref(false);
 
 const areaForm = useForm({
-    name: props.currentRule?.name || 'Toko Utama',
-    description: props.currentRule?.description || '',
-    latitude: props.currentRule?.latitude ?? '',
-    longitude: props.currentRule?.longitude ?? '',
-    radius_km: props.currentRule?.radius_km ?? '',
-    shipping_cost: props.currentRule?.shipping_cost_per_km ?? props.currentRule?.shipping_cost ?? '',
-    is_active: props.currentRule?.is_active ?? true,
+    name: 'Toko Utama',
+    description: '',
+    latitude: '',
+    longitude: '',
+    radius_km: '',
+    shipping_cost: '',
+    is_active: true,
 });
 
 const columns = [
@@ -48,42 +41,51 @@ const columns = [
     { key: 'is_active', label: 'Status' },
 ];
 
-function submitFilters() {
-    filterForm.get(route('admin.shipping-areas.index'), { preserveState: true, replace: true });
+const modalTitle = computed(() => editingId.value ? 'Edit Aturan Ongkir' : 'Tambah Aturan Ongkir');
+
+function fillForm(area = null) {
+    editingId.value = area?.id ?? null;
+    areaForm.name = area?.name || 'Toko Utama';
+    areaForm.description = area?.description || '';
+    areaForm.latitude = area?.latitude ?? '';
+    areaForm.longitude = area?.longitude ?? '';
+    areaForm.radius_km = area?.radius_km ?? '';
+    areaForm.shipping_cost = area?.shipping_cost_per_km ?? area?.shipping_cost ?? '';
+    areaForm.is_active = area?.is_active ?? true;
+    areaForm.clearErrors();
+}
+
+function openCreateModal() {
+    fillForm();
+    formModalOpen.value = true;
 }
 
 function edit(area) {
-    editingId.value = area.id;
-    areaForm.name = area.name;
-    areaForm.description = area.description || '';
-    areaForm.latitude = area.latitude;
-    areaForm.longitude = area.longitude;
-    areaForm.radius_km = area.radius_km;
-    areaForm.shipping_cost = area.shipping_cost_per_km ?? area.shipping_cost;
-    areaForm.is_active = area.is_active;
-    areaForm.clearErrors();
+    fillForm(area);
+    formModalOpen.value = true;
 }
 
-function reset() {
-    if (props.currentRule) {
-        edit(props.currentRule);
-    } else {
-        editingId.value = null;
-        areaForm.reset();
-        areaForm.name = 'Toko Utama';
-        areaForm.is_active = true;
-    }
-
-    areaForm.clearErrors();
-}
-
-function submitArea() {
-    if (editingId.value) {
-        areaForm.put(route('admin.shipping-areas.update', editingId.value), { onSuccess: reset });
+function closeModal() {
+    if (areaForm.processing) {
         return;
     }
 
-    areaForm.post(route('admin.shipping-areas.store'), { onSuccess: reset });
+    formModalOpen.value = false;
+    fillForm();
+}
+
+function submitArea() {
+    const options = {
+        preserveScroll: true,
+        onSuccess: closeModal,
+    };
+
+    if (editingId.value) {
+        areaForm.put(route('admin.shipping-areas.update', editingId.value), options);
+        return;
+    }
+
+    areaForm.post(route('admin.shipping-areas.store'), options);
 }
 
 async function destroyArea(area) {
@@ -110,61 +112,13 @@ function formatRupiah(value) {
     <Head title="Aturan Ongkir Radius" />
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Aturan Ongkir Radius">
-        <div class="mb-4">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xl font-semibold text-neutral-text">Pengaturan ongkir radius</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Satu aturan aktif dipakai checkout: jarak customer dari titik asal dikalikan tarif per KM.</p>
+            <AppButton type="button" @click="openCreateModal">
+                <Plus class="h-4 w-4" />
+                Tambah Aturan
+            </AppButton>
         </div>
-
-        <div class="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
-            <form class="rounded-md border border-neutral-border bg-white p-5" @submit.prevent="submitArea">
-                <div class="grid gap-4 md:grid-cols-2">
-                    <FormInput id="name" v-model="areaForm.name" label="Nama titik asal" :error="areaForm.errors.name" required />
-                    <FormInput id="radius_km" v-model="areaForm.radius_km" type="number" label="Radius layanan maksimal (km)" :error="areaForm.errors.radius_km" required />
-                    <FormInput id="shipping_cost" v-model="areaForm.shipping_cost" type="number" label="Tarif ongkir per KM (Rp)" :error="areaForm.errors.shipping_cost" required />
-                    <label class="flex items-center gap-2 pt-7 text-sm font-medium text-neutral-text">
-                        <input v-model="areaForm.is_active" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
-                        Aktif digunakan checkout
-                    </label>
-                    <label class="block md:col-span-2" for="description">
-                        <span class="text-sm font-medium text-neutral-text">Deskripsi dan catatan operasional</span>
-                        <textarea id="description" v-model="areaForm.description" rows="3" class="mt-1 block w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" />
-                        <p v-if="areaForm.errors.description" class="mt-1 text-sm text-danger">{{ areaForm.errors.description }}</p>
-                    </label>
-                </div>
-                <p v-if="areaForm.errors.is_active" class="mt-2 text-sm text-danger">{{ areaForm.errors.is_active }}</p>
-                <div class="mt-4 flex gap-2">
-                    <AppButton type="submit" :loading="areaForm.processing">
-                        <Save class="h-4 w-4" />
-                        Simpan Aturan Ongkir
-                    </AppButton>
-                    <AppButton v-if="editingId" type="button" variant="secondary" @click="reset">Batal</AppButton>
-                </div>
-            </form>
-
-            <LeafletLocationPicker
-                v-model:latitude="areaForm.latitude"
-                v-model:longitude="areaForm.longitude"
-                title="Titik asal pengiriman dan radius"
-                marker-label="Titik asal belum dipilih"
-                helper="Klik peta untuk menentukan titik asal pengiriman."
-                search-placeholder="Cari alamat titik asal"
-                :radius-km="areaForm.radius_km"
-                :show-radius="true"
-                :error="areaForm.errors.latitude || areaForm.errors.longitude"
-            >
-                <template #actions>
-                    <span class="text-xs text-neutral-muted">{{ Number(areaForm.radius_km || 0) }} km</span>
-                </template>
-            </LeafletLocationPicker>
-        </div>
-
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_auto]" @submit.prevent="submitFilters">
-            <FormInput id="keyword" v-model="filterForm.keyword" label="Keyword" placeholder="Cari titik asal atau catatan" />
-            <FormSelect id="is_active" v-model="filterForm.is_active" label="Status" :options="activeOptions" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
-        </form>
 
         <DataTable :columns="columns" :rows="areas.data">
             <template #cell-name="{ row }">
@@ -190,10 +144,67 @@ function formatRupiah(value) {
                 </div>
             </template>
             <template #empty>
-                <EmptyState title="Belum ada aturan ongkir" />
+                <EmptyState title="Belum ada aturan ongkir">
+                    <template #actions>
+                        <AppButton type="button" @click="openCreateModal">Tambah Aturan</AppButton>
+                    </template>
+                </EmptyState>
             </template>
         </DataTable>
 
         <Pagination class="mt-4" :links="areas.links" />
+
+        <Modal :show="formModalOpen" max-width="5xl" :closeable="!areaForm.processing" @close="closeModal">
+            <form class="p-6" @submit.prevent="submitArea">
+                <div class="mb-5">
+                    <h2 class="text-lg font-semibold text-neutral-text">{{ modalTitle }}</h2>
+                </div>
+
+                <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,420px)_1fr]">
+                    <div class="grid self-start gap-4">
+                        <FormInput id="name" v-model="areaForm.name" label="Nama titik asal" :error="areaForm.errors.name" required />
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <FormInput id="radius_km" v-model="areaForm.radius_km" type="number" label="Radius layanan maksimal (km)" :error="areaForm.errors.radius_km" required />
+                            <FormInput id="shipping_cost" v-model="areaForm.shipping_cost" type="number" label="Tarif ongkir per KM (Rp)" :error="areaForm.errors.shipping_cost" required />
+                        </div>
+                        <label class="block" for="description">
+                            <span class="text-sm font-medium text-neutral-text">Deskripsi dan catatan operasional</span>
+                            <textarea id="description" v-model="areaForm.description" rows="3" class="mt-1 block w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" />
+                            <p v-if="areaForm.errors.description" class="mt-1 text-sm text-danger">{{ areaForm.errors.description }}</p>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-neutral-text">
+                            <input v-model="areaForm.is_active" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
+                            Aktif digunakan checkout
+                        </label>
+                        <p v-if="areaForm.errors.is_active" class="text-sm text-danger">{{ areaForm.errors.is_active }}</p>
+                    </div>
+
+                    <LeafletLocationPicker
+                        v-model:latitude="areaForm.latitude"
+                        v-model:longitude="areaForm.longitude"
+                        class="self-start"
+                        title="Titik asal pengiriman dan radius"
+                        marker-label="Titik asal belum dipilih"
+                        helper="Klik peta untuk menentukan titik asal pengiriman."
+                        search-placeholder="Cari alamat titik asal"
+                        :radius-km="areaForm.radius_km"
+                        :show-radius="true"
+                        :error="areaForm.errors.latitude || areaForm.errors.longitude"
+                    >
+                        <template #actions>
+                            <span class="text-xs text-neutral-muted">{{ Number(areaForm.radius_km || 0) }} km</span>
+                        </template>
+                    </LeafletLocationPicker>
+                </div>
+
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <AppButton type="button" variant="secondary" @click="closeModal">Batal</AppButton>
+                    <AppButton type="submit" :loading="areaForm.processing">
+                        <Save class="h-4 w-4" />
+                        Simpan Aturan Ongkir
+                    </AppButton>
+                </div>
+            </form>
+        </Modal>
     </AuthenticatedLayout>
 </template>

@@ -65,7 +65,15 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Makassar'),
+
+    'store_contact' => [
+        'name' => env('STORE_NAME', 'SofaStore'),
+        'address' => env('STORE_ADDRESS', 'Palu, Sulawesi Tengah'),
+        'email' => env('STORE_EMAIL', 'hello@sofastore.test'),
+        'whatsapp' => env('STORE_WHATSAPP', '081234567890'),
+        'hours' => env('STORE_HOURS', 'Senin-Sabtu, 09.00-18.00 WITA'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

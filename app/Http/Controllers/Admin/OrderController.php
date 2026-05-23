@@ -39,7 +39,10 @@ class OrderController extends Controller
                     $query->where('order_number', 'like', "%{$keyword}%")
                         ->orWhere('customer_name', 'like', "%{$keyword}%")
                         ->orWhere('customer_phone', 'like', "%{$keyword}%")
-                        ->orWhereHas('user', fn ($query) => $query->where('email', 'like', "%{$keyword}%"));
+                        ->orWhereHas('user', fn ($query) => $query->where('email', 'like', "%{$keyword}%"))
+                        ->orWhereHas('payments', fn ($query) => $query
+                            ->where('midtrans_order_id', 'like', "%{$keyword}%")
+                            ->orWhere('midtrans_transaction_id', 'like', "%{$keyword}%"));
                 });
             })
             ->when($filters['order_status'] ?? null, fn ($query, string $status) => $query->where('order_status', $status))
@@ -137,9 +140,12 @@ class OrderController extends Controller
             'shipment_status' => $order->shipment?->status ?? 'belum_dijadwalkan',
             'items_count' => $order->items_count,
             'latest_payment' => $latestPayment ? [
+                'id' => $latestPayment->id,
                 'attempt_number' => $latestPayment->attempt_number,
                 'status' => $latestPayment->status,
                 'midtrans_order_id' => $latestPayment->midtrans_order_id,
+                'midtrans_transaction_id' => $latestPayment->midtrans_transaction_id,
+                'payment_type' => $latestPayment->payment_type,
             ] : null,
         ];
     }

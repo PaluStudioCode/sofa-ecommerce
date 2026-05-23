@@ -7,6 +7,7 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Trash2 } from '@lucide/vue';
@@ -43,9 +44,7 @@ const columns = [
     { key: 'status', label: 'Status' },
 ];
 
-function submit() {
-    form.get(route('admin.vouchers.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(form, ['keyword', 'status', 'discount_type'], 'admin.vouchers.index');
 
 function openCreateModal() {
     selectedVoucher.value = null;
@@ -103,23 +102,17 @@ async function destroyVoucher(voucher) {
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Voucher">
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="text-xl font-semibold text-neutral-text">Manajemen voucher</h2>
-                <p class="mt-1 text-sm text-neutral-muted">Pantau promo, kuota, status, dan penggunaan voucher checkout.</p>
-            </div>
+            <h2 class="text-xl font-semibold text-neutral-text">Manajemen voucher</h2>
             <AppButton type="button" @click="openCreateModal">
                 <Plus class="h-4 w-4" />
                 Tambah Voucher
             </AppButton>
         </div>
 
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_220px_auto]" @submit.prevent="submit">
+        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_220px]" @submit.prevent>
             <FormInput id="keyword" v-model="form.keyword" label="Keyword" placeholder="Cari kode atau nama" />
             <FormSelect id="status" v-model="form.status" label="Status" :options="statusOptions" />
             <FormSelect id="discount_type" v-model="form.discount_type" label="Tipe diskon" :options="discountTypeOptions" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
         </form>
 
         <DataTable :columns="columns" :rows="vouchers.data">

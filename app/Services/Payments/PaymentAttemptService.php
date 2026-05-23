@@ -77,7 +77,7 @@ class PaymentAttemptService
 
         if (! $payment) {
             throw ValidationException::withMessages([
-                'order_id' => 'Payment attempt tidak ditemukan.',
+                'order_id' => 'Data pembayaran tidak ditemukan.',
             ]);
         }
 
@@ -184,7 +184,7 @@ class PaymentAttemptService
         }
 
         if ($order->payments->contains('status', 'pending')) {
-            throw ValidationException::withMessages(['order' => 'Masih ada payment attempt pending.']);
+            throw ValidationException::withMessages(['order' => 'Masih ada pembayaran yang menunggu.']);
         }
     }
 
@@ -200,7 +200,7 @@ class PaymentAttemptService
 
             if ($variant->status !== 'aktif' || $variant->availableStock() < $item->quantity) {
                 throw ValidationException::withMessages([
-                    'stock' => "Stok {$item->product_name} tidak mencukupi untuk payment attempt baru.",
+                    'stock' => "Stok {$item->product_name} tidak mencukupi untuk pembayaran baru.",
                 ]);
             }
 
@@ -287,7 +287,7 @@ class PaymentAttemptService
             ],
             'item_details' => $this->itemDetails($order),
             'callbacks' => [
-                'finish' => route('checkout.index', ['order' => $order->id, 'payment_return' => 1]),
+                'finish' => route('orders.show', ['order' => $order->id, 'payment_return' => 1]),
             ],
         ];
     }

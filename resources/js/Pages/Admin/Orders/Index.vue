@@ -7,6 +7,7 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Eye } from '@lucide/vue';
 
@@ -33,15 +34,13 @@ const columns = [
     { key: 'order_number', label: 'Order' },
     { key: 'customer_name', label: 'Customer' },
     { key: 'total_amount', label: 'Total' },
-    { key: 'order_status', label: 'Order' },
-    { key: 'payment_status', label: 'Bayar' },
+    { key: 'payment', label: 'Pembayaran' },
+    { key: 'order_status', label: 'Status Order' },
     { key: 'shipment_status', label: 'Kirim' },
     { key: 'created_at', label: 'Tanggal' },
 ];
 
-function submit() {
-    form.get(route('admin.orders.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(form, ['keyword', 'order_status', 'payment_status', 'shipment_status', 'date_from', 'date_to'], 'admin.orders.index');
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -67,19 +66,15 @@ function formatDate(value) {
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pesanan">
         <div class="mb-4">
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen pesanan</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Filter pesanan, pantau pembayaran, dan proses status order sesuai transisi PRD.</p>
         </div>
 
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 lg:grid-cols-[1.2fr_repeat(3,180px)_150px_150px_auto]" @submit.prevent="submit">
-            <FormInput id="keyword" v-model="form.keyword" label="Keyword" placeholder="Nomor, customer, telepon, email" />
+        <form class="mb-4 grid min-w-0 gap-3 rounded-md border border-neutral-border bg-white p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(0,1fr))]" @submit.prevent>
+            <FormInput id="keyword" v-model="form.keyword" class="sm:col-span-2 xl:col-span-1" label="Keyword" placeholder="Nomor, customer, telepon, email" />
             <FormSelect id="order_status" v-model="form.order_status" label="Order" :options="orderStatusOptions" />
             <FormSelect id="payment_status" v-model="form.payment_status" label="Pembayaran" :options="paymentStatusOptions" />
             <FormSelect id="shipment_status" v-model="form.shipment_status" label="Pengiriman" :options="shipmentStatusOptions" />
             <FormInput id="date_from" v-model="form.date_from" type="date" label="Dari" :error="form.errors.date_from" />
             <FormInput id="date_to" v-model="form.date_to" type="date" label="Sampai" :error="form.errors.date_to" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
         </form>
 
         <DataTable :columns="columns" :rows="orders.data">
@@ -98,8 +93,16 @@ function formatDate(value) {
                 </div>
             </template>
             <template #cell-total_amount="{ value }">{{ formatRupiah(value) }}</template>
+            <template #cell-payment="{ row }">
+                <div class="grid gap-1">
+                    <StatusBadge :status="row.payment_status" />
+                    <p v-if="row.latest_payment" class="text-xs text-neutral-muted">
+                        #{{ row.latest_payment.attempt_number }} {{ row.latest_payment.midtrans_order_id }}
+                    </p>
+                    <p v-else class="text-xs text-neutral-muted">Belum ada attempt</p>
+                </div>
+            </template>
             <template #cell-order_status="{ value }"><StatusBadge :status="value" /></template>
-            <template #cell-payment_status="{ value }"><StatusBadge :status="value" /></template>
             <template #cell-shipment_status="{ value }"><StatusBadge :status="value" /></template>
             <template #cell-created_at="{ value }">{{ formatDate(value) }}</template>
             <template #actions="{ row }">

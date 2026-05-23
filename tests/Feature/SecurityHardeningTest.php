@@ -42,9 +42,8 @@ class SecurityHardeningTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Checkout/Index')
-                ->where('midtrans.clientKey', 'phase16-midtrans-client-key')
-                ->missing('midtrans.server_key')
-                ->missing('midtrans.serverKey')
+                ->missing('midtrans')
+                ->missing('paymentGateway')
                 ->missing('googleMaps')
             );
 

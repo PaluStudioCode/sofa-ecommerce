@@ -42,14 +42,15 @@ class WhatsAppNotificationTest extends TestCase
             ->post(route('checkout.location'), $this->locationPayload())
             ->assertRedirect(route('checkout.index'));
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->post(route('checkout.store'), [
                 'customer_phone' => '081234567890',
                 'shipping_note' => null,
-            ])
-            ->assertRedirect();
+            ]);
 
         $order = Order::firstOrFail();
+
+        $response->assertRedirect(route('orders.show', ['order' => $order->id, 'new_order' => 1]));
 
         $this->assertSame(1, $client->calls);
         $this->assertDatabaseHas('notifications', [

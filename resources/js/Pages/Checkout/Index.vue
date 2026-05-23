@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { CreditCard, MapPin, PackageCheck, X } from '@lucide/vue';
+import { MapPin } from '@lucide/vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
@@ -15,14 +15,10 @@ const props = defineProps({
     summary: { type: Object, required: true },
     location: { type: Object, default: null },
     voucherCode: { type: String, default: '' },
-    midtrans: { type: Object, default: () => ({}) },
-    createdOrder: { type: Object, default: null },
 });
 
 const page = usePage();
 const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
-const paymentModalOpen = ref(false);
-const snapLoading = ref(false);
 
 const quoteForm = useForm({
     voucher_code: props.voucherCode || '',
@@ -33,27 +29,14 @@ const orderForm = useForm({
     shipping_note: '',
     voucher_code: props.voucherCode || '',
 });
-const retryPaymentForm = useForm({});
 
-const canCreateOrder = computed(() => props.summary.can_submit && props.items.length > 0 && !props.createdOrder);
+const canCreateOrder = computed(() => props.summary.can_submit && props.items.length > 0);
 const hasSavedAddress = computed(() => Boolean(props.location?.formatted_address)
     && props.location?.latitude !== null
     && props.location?.latitude !== undefined
     && props.location?.longitude !== null
     && props.location?.longitude !== undefined);
 const addressMeta = computed(() => [props.location?.district, props.location?.city, props.location?.postal_code].filter(Boolean).join(', '));
-const canOpenPendingPayment = computed(() => {
-    if (props.createdOrder?.payment?.status !== 'pending' || !props.createdOrder.payment.snap_token) {
-        return false;
-    }
-
-    return !props.createdOrder.payment.expired_at || new Date(props.createdOrder.payment.expired_at) > new Date();
-});
-const returnedFromPayment = computed(() => {
-    const url = new URL(page.url, 'http://localhost');
-
-    return url.searchParams.has('payment_return') || url.searchParams.has('transaction_status') || url.searchParams.has('result');
-});
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -84,83 +67,6 @@ function submitOrder() {
         preserveScroll: true,
     });
 }
-
-function snapScriptUrl() {
-    return props.midtrans?.isProduction
-        ? 'https://app.midtrans.com/snap/snap.js'
-        : 'https://app.sandbox.midtrans.com/snap/snap.js';
-}
-
-function ensureSnapScript() {
-    if (window.snap || !props.midtrans?.clientKey) {
-        return Promise.resolve();
-    }
-
-    const existingScript = document.querySelector('script[data-midtrans-snap]');
-
-    if (existingScript) {
-        if (existingScript.dataset.loaded === 'true') {
-            return Promise.resolve();
-        }
-
-        return new Promise((resolve, reject) => {
-            existingScript.addEventListener('load', resolve, { once: true });
-            existingScript.addEventListener('error', reject, { once: true });
-        });
-    }
-
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = snapScriptUrl();
-        script.async = true;
-        script.setAttribute('data-midtrans-snap', 'true');
-        script.setAttribute('data-client-key', props.midtrans.clientKey);
-        script.addEventListener('load', () => {
-            script.dataset.loaded = 'true';
-            resolve();
-        }, { once: true });
-        script.addEventListener('error', reject, { once: true });
-        document.head.appendChild(script);
-    });
-}
-
-async function openPaymentModal() {
-    const token = props.createdOrder?.payment?.snap_token;
-
-    if (!token) {
-        paymentModalOpen.value = true;
-        return;
-    }
-
-    snapLoading.value = true;
-
-    try {
-        await ensureSnapScript();
-
-        if (window.snap) {
-            window.snap.pay(token);
-            return;
-        }
-    } catch (error) {
-        // Fallback modal keeps the payment token reachable when Snap script is not available.
-    } finally {
-        snapLoading.value = false;
-    }
-
-    paymentModalOpen.value = true;
-}
-
-function createPaymentAttempt() {
-    retryPaymentForm.post(route('payments.store', props.createdOrder.id), {
-        preserveScroll: true,
-    });
-}
-
-onMounted(() => {
-    if (canOpenPendingPayment.value && !returnedFromPayment.value) {
-        openPaymentModal();
-    }
-});
 </script>
 
 <template>
@@ -177,59 +83,7 @@ onMounted(() => {
                     <AppButton href="/cart" variant="secondary">Kembali ke Keranjang</AppButton>
                 </div>
 
-                <section v-if="createdOrder" class="mb-5 rounded-md border border-green-200 bg-green-50 p-5">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <PackageCheck class="h-5 w-5 text-success" />
-                                <h2 class="text-lg font-semibold text-neutral-text">Pesanan dibuat</h2>
-                            </div>
-                            <p class="mt-2 text-sm text-neutral-muted">
-                                Nomor pesanan {{ createdOrder.order_number }}
-                                {{ createdOrder.payment_status === 'success' ? 'sudah dibayar.' : 'menunggu pembayaran Midtrans.' }}
-                            </p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <StatusBadge :status="createdOrder.order_status" />
-                            <StatusBadge :status="createdOrder.payment_status" />
-                        </div>
-                    </div>
-                    <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p class="text-xl font-semibold text-neutral-text">{{ formatRupiah(createdOrder.total_amount) }}</p>
-                        <AppButton v-if="canOpenPendingPayment" :loading="snapLoading" @click="openPaymentModal">
-                            <CreditCard class="h-4 w-4" />
-                            Buka Modal Midtrans
-                        </AppButton>
-                        <AppButton v-else-if="createdOrder.can_create_payment_attempt" :loading="retryPaymentForm.processing" @click="createPaymentAttempt">
-                            <CreditCard class="h-4 w-4" />
-                            Coba Bayar Lagi
-                        </AppButton>
-                        <AppButton :href="route('orders.show', createdOrder.id)" variant="secondary">Detail Pesanan</AppButton>
-                    </div>
-                    <Alert v-if="createdOrder.payment?.status === 'pending'" tone="info" class="mt-4">
-                        {{ returnedFromPayment ? 'Kami sedang menunggu konfirmasi pembayaran dari Midtrans.' : 'Pembayaran diproses melalui Midtrans Snap. Jika modal ditutup, status tetap pending sampai konfirmasi diterima.' }}
-                    </Alert>
-                    <Alert v-else-if="createdOrder.payment?.status === 'expired'" tone="warning" class="mt-4">
-                        Batas waktu pembayaran sudah habis. Buat payment attempt baru untuk mencoba lagi.
-                    </Alert>
-                    <Alert v-else-if="['failed', 'cancelled'].includes(createdOrder.payment?.status)" tone="warning" class="mt-4">
-                        Pembayaran belum berhasil. Kamu dapat mencoba payment attempt baru selama pesanan belum dibatalkan atau dibayar.
-                    </Alert>
-                    <Alert v-if="createdOrder.order_status === 'perlu_review_admin'" tone="warning" class="mt-4">
-                        Pembayaran diterima, tetapi stok perlu dicek admin sebelum pesanan diproses.
-                    </Alert>
-                    <Alert v-if="retryPaymentForm.errors.order || retryPaymentForm.errors.stock" tone="danger" class="mt-4">
-                        {{ retryPaymentForm.errors.order || retryPaymentForm.errors.stock }}
-                    </Alert>
-                    <div v-if="createdOrder.items?.length" class="mt-4 grid gap-2 border-t border-green-200 pt-4 text-sm">
-                        <div v-for="item in createdOrder.items" :key="`${item.product_name}-${item.variant_name}`" class="flex justify-between gap-3">
-                            <span class="text-neutral-muted">{{ item.product_name }} - {{ item.variant_name || 'Varian standar' }} x {{ item.quantity }}</span>
-                            <span class="font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</span>
-                        </div>
-                    </div>
-                </section>
-
-                <EmptyState v-if="items.length === 0 && !createdOrder" title="Keranjang kosong" message="Pilih produk sebelum membuat pesanan.">
+                <EmptyState v-if="items.length === 0" title="Keranjang kosong" message="Pilih produk sebelum membuat pesanan.">
                     <template #actions>
                         <AppButton href="/catalog">Lihat Katalog</AppButton>
                     </template>
@@ -253,7 +107,7 @@ onMounted(() => {
                             </div>
                         </section>
 
-                        <section v-if="!createdOrder" class="rounded-md border border-neutral-border bg-white p-5">
+                        <section class="rounded-md border border-neutral-border bg-white p-5">
                             <h2 class="text-lg font-semibold text-neutral-text">Kontak dan alamat</h2>
                             <div class="mt-4 grid gap-4">
                                 <FormInput id="customer_phone" v-model="orderForm.customer_phone" label="Nomor telepon" :error="orderForm.errors.customer_phone" required />
@@ -290,7 +144,7 @@ onMounted(() => {
                     <aside class="h-fit rounded-md border border-neutral-border bg-white p-5">
                         <h2 class="text-lg font-semibold text-neutral-text">Ringkasan pembayaran</h2>
 
-                        <div v-if="!createdOrder" class="mt-4">
+                        <div class="mt-4">
                             <VoucherInput v-model="quoteForm.voucher_code" :loading="quoteForm.processing" :error="quoteForm.errors.voucher_code" @apply="applyVoucher" />
                         </div>
 
@@ -319,26 +173,18 @@ onMounted(() => {
                                 <span class="text-neutral-muted">Jarak alamat</span>
                                 <span class="text-right font-semibold text-neutral-text">{{ formatKilometer(summary.store.distance_km) }} km</span>
                             </div>
-                            <div v-if="summary.store" class="flex justify-between gap-3">
-                                <span class="text-neutral-muted">Tarif per KM</span>
-                                <span class="text-right font-semibold text-neutral-text">{{ formatRupiah(summary.store.shipping_cost_per_km) }}/km</span>
-                            </div>
-                            <div v-if="summary.store" class="flex justify-between gap-3">
-                                <span class="text-neutral-muted">Perhitungan ongkir</span>
-                                <span class="text-right font-semibold text-neutral-text">{{ summary.store.billable_distance_km }} km x {{ formatRupiah(summary.store.shipping_cost_per_km) }}/km</span>
-                            </div>
                             <div class="flex justify-between gap-3 border-t border-neutral-border pt-3 text-base">
                                 <span class="font-semibold text-neutral-text">Total</span>
                                 <span class="font-bold text-neutral-text">{{ formatRupiah(summary.total) }}</span>
                             </div>
                         </div>
 
-                        <Alert v-if="!summary.can_submit && !createdOrder" tone="warning" class="mt-4">
+                        <Alert v-if="!summary.can_submit" tone="warning" class="mt-4">
                             Atur alamat pengiriman yang masuk area layanan sebelum membuat pesanan.
                         </Alert>
                         <Alert v-if="orderForm.errors.cart" tone="danger" class="mt-4">{{ orderForm.errors.cart }}</Alert>
 
-                        <div v-if="!createdOrder" class="mt-5">
+                        <div class="mt-5">
                             <AppButton class="w-full" :disabled="!canCreateOrder" :loading="orderForm.processing" @click="submitOrder">
                                 Buat Pesanan
                             </AppButton>
@@ -347,36 +193,5 @@ onMounted(() => {
                 </div>
             </div>
         </section>
-
-        <div v-if="paymentModalOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-            <section class="w-full max-w-lg rounded-md bg-white p-5 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <h2 id="payment-modal-title" class="text-lg font-semibold text-neutral-text">Midtrans Snap</h2>
-                        <p class="mt-1 text-sm text-neutral-muted">Token pembayaran sudah dibuat untuk pesanan {{ createdOrder.order_number }}.</p>
-                    </div>
-                    <button type="button" class="grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="paymentModalOpen = false">
-                        <X class="h-4 w-4" />
-                        <span class="sr-only">Tutup</span>
-                    </button>
-                </div>
-                <div class="mt-4 rounded-md border border-neutral-border bg-neutral-light p-4 text-sm">
-                    <p class="font-semibold text-neutral-text">Total: {{ formatRupiah(createdOrder.total_amount) }}</p>
-                    <p class="mt-2 break-all text-neutral-muted">Snap token: {{ createdOrder.payment?.snap_token || 'Belum tersedia' }}</p>
-                </div>
-                <div class="mt-5 flex flex-wrap justify-end gap-2">
-                    <a
-                        v-if="createdOrder.payment?.redirect_url"
-                        :href="createdOrder.payment.redirect_url"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-neutral-border bg-white px-4 text-sm font-semibold text-neutral-text transition hover:bg-neutral-light focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    >
-                        Buka Snap
-                    </a>
-                    <AppButton type="button" @click="paymentModalOpen = false">Tutup</AppButton>
-                </div>
-            </section>
-        </div>
     </PublicLayout>
 </template>

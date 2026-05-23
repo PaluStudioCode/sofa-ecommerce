@@ -9,6 +9,7 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { Head, useForm } from '@inertiajs/vue3';
 import { Edit, Truck } from '@lucide/vue';
 
@@ -74,9 +75,7 @@ const allowedStatuses = computed(() => {
 const availableStatusOptions = computed(() => props.formStatusOptions.filter((option) => allowedStatuses.value.includes(option.value)));
 const actionStatusOptions = computed(() => availableStatusOptions.value.filter((option) => option.value !== currentShipmentStatus.value));
 
-function submitFilters() {
-    filterForm.get(route('admin.shipments.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(filterForm, ['keyword', 'status'], 'admin.shipments.index');
 
 function selectOrder(order) {
     if (closeResetTimer) {
@@ -235,16 +234,12 @@ watch(() => shipmentForm.status, (status) => {
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pengiriman Internal">
         <div class="mb-4">
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen pengiriman internal</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Kelola jadwal, petugas, kendaraan, dan status kirim untuk order yang sudah dibayar.</p>
         </div>
 
         <div class="mb-5">
-            <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_auto]" @submit.prevent="submitFilters">
+            <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px]" @submit.prevent>
                 <FormInput id="keyword" v-model="filterForm.keyword" label="Keyword" placeholder="Nomor order, customer, email" />
                 <FormSelect id="status" v-model="filterForm.status" label="Status shipment" :options="statusOptions" />
-                <div class="flex items-end">
-                    <AppButton type="submit">Filter</AppButton>
-                </div>
             </form>
 
             <DataTable :columns="columns" :rows="orders.data">

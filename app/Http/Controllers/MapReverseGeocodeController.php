@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Maps\ReverseGeocodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class MapReverseGeocodeController extends Controller
@@ -21,7 +22,15 @@ class MapReverseGeocodeController extends Controller
 
         try {
             $details = $geocoder->lookup($latitude, $longitude);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Maps reverse geocode lookup failed while selecting an address.', [
+                'user_id' => $request->user()?->id,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'exception_class' => $exception::class,
+                'exception_message' => $exception->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => 'Alamat lokasi belum dapat diambil.',
             ], 502);

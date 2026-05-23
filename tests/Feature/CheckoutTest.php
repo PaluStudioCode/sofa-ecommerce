@@ -13,6 +13,7 @@ use App\Models\VoucherUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -184,15 +185,16 @@ class CheckoutTest extends TestCase
             ->post(route('checkout.quote'), ['voucher_code' => 'SOFA300'])
             ->assertRedirect(route('checkout.index'));
 
-        $this->actingAs($customer)
+        $response = $this->actingAs($customer)
             ->post(route('checkout.store'), [
                 'customer_phone' => '081234567890',
                 'shipping_note' => 'Blok A nomor 10',
                 'voucher_code' => 'SOFA300',
-            ])
-            ->assertRedirect();
+            ]);
 
         $order = Order::firstOrFail();
+
+        $response->assertRedirect(route('orders.show', ['order' => $order->id, 'new_order' => 1]));
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
@@ -367,6 +369,36 @@ class CheckoutTest extends TestCase
             ->assertJsonPath('city', 'Poboya');
 
         Http::assertSentCount(1);
+    }
+
+    public function test_reverse_geocode_route_logs_lookup_errors(): void
+    {
+        Cache::flush();
+        Log::spy();
+
+        Http::fake([
+            'nominatim.openstreetmap.org/*' => Http::response(['message' => 'provider error'], 500),
+        ]);
+
+        $customer = User::factory()->create();
+
+        $this->actingAs($customer)
+            ->getJson(route('maps.reverse-geocode', [
+                'latitude' => -0.860163,
+                'longitude' => 119.918175,
+            ]))
+            ->assertStatus(502)
+            ->assertJson([
+                'message' => 'Alamat lokasi belum dapat diambil.',
+            ]);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->withArgs(fn (string $message, array $context) => $message === 'Maps reverse geocode lookup failed while selecting an address.'
+                && $context['user_id'] === $customer->id
+                && $context['latitude'] === -0.860163
+                && $context['longitude'] === 119.918175
+                && isset($context['exception_class'], $context['exception_message']));
     }
 
     private function locationPayload(array $overrides = []): array

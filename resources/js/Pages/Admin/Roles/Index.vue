@@ -16,7 +16,6 @@ defineProps({
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Role">
         <div class="mb-5">
             <h2 class="text-xl font-semibold text-neutral-text">Role dan permission</h2>
-            <p class="mt-1 text-sm text-neutral-muted">Matriks role mengikuti konfigurasi sistem dan ditampilkan read-only pada tahap ini.</p>
         </div>
 
         <div class="grid gap-4 lg:grid-cols-3">

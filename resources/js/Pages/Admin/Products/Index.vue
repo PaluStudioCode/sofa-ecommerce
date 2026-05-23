@@ -7,9 +7,10 @@ import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
 import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
+import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { Edit, Eye, Plus, Trash2 } from '@lucide/vue';
+import { Eye, Plus, Trash2 } from '@lucide/vue';
 import ProductFormModal from './ProductFormModal.vue';
 import { ref } from 'vue';
 
@@ -45,17 +46,10 @@ const statusOptions = [
     { value: 'nonaktif', label: 'Nonaktif' },
 ];
 
-function submit() {
-    form.get(route('admin.products.index'), { preserveState: true, replace: true });
-}
+useAutoFilter(form, ['keyword', 'category', 'status'], 'admin.products.index');
 
 function openCreateModal() {
     selectedProduct.value = null;
-    formModalOpen.value = true;
-}
-
-function openEditModal(product) {
-    selectedProduct.value = product;
     formModalOpen.value = true;
 }
 
@@ -85,13 +79,10 @@ async function destroyProduct(product) {
             </AppButton>
         </div>
 
-        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_180px_auto]" @submit.prevent="submit">
+        <form class="mb-4 grid gap-3 rounded-md border border-neutral-border bg-white p-4 md:grid-cols-[1fr_220px_180px]" @submit.prevent>
             <FormInput id="keyword" v-model="form.keyword" label="Keyword" placeholder="Cari produk" />
             <FormSelect id="category" v-model="form.category" label="Kategori" :options="categories" />
             <FormSelect id="status" v-model="form.status" label="Status" :options="statusOptions" />
-            <div class="flex items-end">
-                <AppButton type="submit">Filter</AppButton>
-            </div>
         </form>
 
         <DataTable :columns="columns" :rows="products.data">
@@ -116,10 +107,6 @@ async function destroyProduct(product) {
                         <Eye class="h-4 w-4" />
                         <span class="sr-only">Detail</span>
                     </Link>
-                    <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="openEditModal(row)">
-                        <Edit class="h-4 w-4" />
-                        <span class="sr-only">Edit</span>
-                    </button>
                     <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="destroyProduct(row)">
                         <Trash2 class="h-4 w-4" />
                         <span class="sr-only">Hapus</span>

@@ -4,10 +4,10 @@ import PublicLayout from './PublicLayout.vue';
 
 <template>
     <PublicLayout>
-        <div class="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center px-4 py-10">
-            <div class="w-full rounded-md border border-neutral-border bg-white p-6 shadow-sm">
+        <section class="grid min-h-[calc(100vh-4rem)] place-items-center bg-neutral-light px-4 py-10 sm:px-6">
+            <div class="w-full max-w-md rounded-md border border-neutral-border bg-white p-6 shadow-xl">
                 <slot />
             </div>
-        </div>
+        </section>
     </PublicLayout>
 </template>
