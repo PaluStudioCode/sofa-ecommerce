@@ -14,12 +14,17 @@ class ProductImageRequest extends FormRequest
 
     public function rules(): array
     {
+        $imageRequirement = $this->isMethod('post') ? 'required_without:images' : 'nullable';
+        $imagesRequirement = $this->isMethod('post') ? 'required_without:image' : 'nullable';
+
         return [
             'product_id' => ['required', 'integer', 'exists:products,id'],
-            'product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
-            'image' => [$this->isMethod('post') ? 'required' : 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
+            'image' => [$imageRequirement, 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
+            'images' => [$imagesRequirement, 'array', 'max:20'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'alt_text' => ['nullable', 'string', 'max:255'],
-            'sort_order' => ['required', 'integer', 'min:0'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_primary' => ['nullable', 'boolean'],
         ];
     }

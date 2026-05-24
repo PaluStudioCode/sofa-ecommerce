@@ -34,8 +34,8 @@ class LandingPageTest extends TestCase
         ]);
 
         $featured = Product::factory()->featured()->create(['status' => 'aktif']);
-        ProductVariant::factory()->for($featured)->create(['status' => 'aktif', 'price' => 3500000, 'stock' => 4, 'reserved_stock' => 0]);
-        ProductImage::factory()->for($featured)->create(['file_path' => 'products/featured.jpg', 'is_primary' => true]);
+        $featuredVariant = ProductVariant::factory()->for($featured)->create(['status' => 'aktif', 'price' => 3500000, 'stock' => 4, 'reserved_stock' => 0]);
+        ProductImage::factory()->for($featuredVariant, 'variant')->create(['file_path' => 'products/featured.jpg', 'is_primary' => true]);
 
         Product::factory()->featured()->inactive()->create();
 

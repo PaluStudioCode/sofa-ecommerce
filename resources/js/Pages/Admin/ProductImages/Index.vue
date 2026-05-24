@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
@@ -40,7 +40,14 @@ const columns = [
     { key: 'is_primary', label: 'Utama' },
 ];
 
-const variantOptions = computed(() => props.variants.filter((variant) => !variant.product_id || variant.product_id === Number(selectedProduct.value)));
+const variantOptions = computed(() => [
+    { value: '', label: selectedProduct.value ? 'Pilih varian' : 'Pilih produk dulu' },
+    ...props.variants.filter((variant) => variant.product_id === Number(selectedProduct.value)),
+]);
+
+watch(selectedProduct, () => {
+    form.product_variant_id = '';
+});
 
 function openUploadModal() {
     form.reset();
@@ -127,8 +134,8 @@ async function destroyImage(image) {
 
                 <div class="grid gap-4 md:grid-cols-2">
                     <FormSelect id="image_product_id" v-model="selectedProduct" label="Produk" :options="products" :error="form.errors.product_id" required />
-                    <FormSelect id="image_variant_id" v-model="form.product_variant_id" label="Varian" :options="variantOptions" :error="form.errors.product_variant_id" />
-                    <FormInput id="image_alt_text" v-model="form.alt_text" label="Alt Text" :error="form.errors.alt_text" />
+                    <FormSelect id="image_variant_id" v-model="form.product_variant_id" label="Varian" :options="variantOptions" :error="form.errors.product_variant_id" required />
+                    <FormInput id="image_alt_text" v-model="form.alt_text" label="Deskripsi Gambar (Opsional)" placeholder="Contoh: Sofa Luna warna abu-abu tampak depan" :error="form.errors.alt_text" />
                     <FormInput id="image_sort_order" v-model="form.sort_order" type="number" label="Urutan" :error="form.errors.sort_order" required />
                 </div>
 

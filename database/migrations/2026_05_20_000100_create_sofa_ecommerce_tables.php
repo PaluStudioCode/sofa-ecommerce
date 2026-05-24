@@ -59,15 +59,14 @@ return new class extends Migration
 
         Schema::create('product_images', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('product_id')->constrained()->cascadeOnUpdate()->cascadeOnDelete();
-            $table->foreignId('product_variant_id')->nullable()->constrained()->cascadeOnUpdate()->nullOnDelete();
+            $table->foreignId('product_variant_id')->constrained()->cascadeOnUpdate()->cascadeOnDelete();
             $table->string('file_path');
             $table->string('alt_text')->nullable();
             $table->unsignedInteger('sort_order')->default(0);
             $table->boolean('is_primary')->default(false)->index();
             $table->timestamps();
 
-            $table->index(['product_id', 'sort_order']);
+            $table->index(['product_variant_id', 'sort_order']);
         });
 
         Schema::create('cart_items', function (Blueprint $table) {

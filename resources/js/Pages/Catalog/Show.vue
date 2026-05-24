@@ -1,7 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ShoppingCart } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, ShoppingCart } from '@lucide/vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
@@ -13,8 +13,8 @@ const props = defineProps({
 });
 
 const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
-const selectedImage = ref(props.product.images[0]?.url || sofaFallback);
-const selectedVariantId = ref(props.product.variants.length === 1 ? props.product.variants[0].id : null);
+const selectedVariantId = ref(props.product.variants[0]?.id || null);
+const selectedImageIndex = ref(0);
 const quantity = ref(1);
 const page = usePage();
 const cartForm = useForm({
@@ -24,7 +24,28 @@ const cartForm = useForm({
 });
 
 const selectedVariant = computed(() => props.product.variants.find((variant) => variant.id === selectedVariantId.value));
+const allVariantImages = computed(() => props.product.variants.flatMap((variant) => variant.images || []));
+const activeImages = computed(() => {
+    if (selectedVariant.value) {
+        return selectedVariant.value.images || [];
+    }
+
+    return allVariantImages.value;
+});
+const selectedImage = computed(() => activeImages.value[selectedImageIndex.value]?.url || sofaFallback);
+const selectedImageAlt = computed(() => activeImages.value[selectedImageIndex.value]?.alt_text || props.product.name);
 const canAdd = computed(() => selectedVariant.value?.can_add_to_cart && quantity.value >= 1 && quantity.value <= selectedVariant.value.available_stock);
+
+watch(selectedVariantId, () => {
+    selectedImageIndex.value = 0;
+});
+
+watch(
+    () => activeImages.value.length,
+    () => {
+        selectedImageIndex.value = 0;
+    },
+);
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -43,6 +64,22 @@ function addToCart() {
         preserveScroll: true,
     });
 }
+
+function selectImage(index) {
+    selectedImageIndex.value = index;
+}
+
+function showPreviousImage() {
+    if (!activeImages.value.length) return;
+
+    selectedImageIndex.value = (selectedImageIndex.value - 1 + activeImages.value.length) % activeImages.value.length;
+}
+
+function showNextImage() {
+    if (!activeImages.value.length) return;
+
+    selectedImageIndex.value = (selectedImageIndex.value + 1) % activeImages.value.length;
+}
 </script>
 
 <template>
@@ -52,13 +89,41 @@ function addToCart() {
         <section class="bg-white py-8">
             <div class="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[0.95fr_1fr] lg:px-8">
                 <div>
-                    <div class="overflow-hidden rounded-md border border-neutral-border bg-neutral-light">
-                        <img :src="selectedImage" :alt="product.name" class="aspect-[4/3] w-full object-cover" />
-                    </div>
-                    <div v-if="product.images.length > 1" class="mt-3 grid grid-cols-4 gap-2">
-                        <button v-for="image in product.images" :key="image.id" type="button" class="overflow-hidden rounded-md border" :class="selectedImage === image.url ? 'border-primary-hover' : 'border-neutral-border'" @click="selectedImage = image.url">
-                            <img :src="image.url" :alt="image.alt_text" class="aspect-square w-full object-cover" />
+                    <div class="relative overflow-hidden rounded-md border border-neutral-border bg-neutral-light">
+                        <img :src="selectedImage" :alt="selectedImageAlt" class="aspect-[4/3] w-full object-cover" />
+                        <button
+                            v-if="activeImages.length > 1"
+                            type="button"
+                            class="absolute left-3 top-1/2 inline-grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-neutral-text shadow-sm hover:bg-white"
+                            @click="showPreviousImage"
+                        >
+                            <ChevronLeft class="h-5 w-5" />
+                            <span class="sr-only">Gambar sebelumnya</span>
                         </button>
+                        <button
+                            v-if="activeImages.length > 1"
+                            type="button"
+                            class="absolute right-3 top-1/2 inline-grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-neutral-text shadow-sm hover:bg-white"
+                            @click="showNextImage"
+                        >
+                            <ChevronRight class="h-5 w-5" />
+                            <span class="sr-only">Gambar berikutnya</span>
+                        </button>
+                    </div>
+                    <div v-if="activeImages.length > 1" class="mt-3 overflow-x-auto pb-2">
+                        <div class="flex gap-2">
+                            <button
+                                v-for="(image, index) in activeImages"
+                                :key="image.id"
+                                type="button"
+                                class="h-20 w-20 shrink-0 overflow-hidden rounded-md border bg-neutral-light"
+                                :class="selectedImageIndex === index ? 'border-primary-hover ring-2 ring-primary-soft' : 'border-neutral-border'"
+                                @click="selectImage(index)"
+                            >
+                                <img :src="image.url" :alt="image.alt_text || product.name" class="h-full w-full object-cover" />
+                                <span class="sr-only">Pilih gambar {{ index + 1 }}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

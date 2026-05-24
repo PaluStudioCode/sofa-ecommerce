@@ -9,6 +9,7 @@ import {
     CreditCard,
     Images,
     LayoutDashboard,
+    LogOut,
     Map,
     MapPinned,
     Menu,
@@ -18,6 +19,7 @@ import {
     Tags,
     TicketPercent,
     Truck,
+    User,
     Users,
     X,
 } from '@lucide/vue';
@@ -97,6 +99,10 @@ function isActive(item) {
     return current === item.href || (item.href !== '/dashboard' && current.startsWith(item.href));
 }
 
+function isCurrentPath(path) {
+    return page.url.split('?')[0] === path;
+}
+
 function groupKey(group) {
     return group.label;
 }
@@ -126,7 +132,7 @@ function toggleGroup(group, index) {
 
 <template>
     <div class="min-h-screen bg-neutral-light text-neutral-text">
-        <aside class="fixed inset-y-0 left-0 z-50 w-72 transform border-r border-neutral-border bg-white transition lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
+        <aside class="fixed inset-y-0 left-0 z-50 flex h-screen w-72 transform flex-col border-r border-neutral-border bg-white transition lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
             <div class="flex h-16 items-center justify-between border-b border-neutral-border px-4">
                 <Link href="/dashboard" class="font-bold">SofaStore</Link>
                 <button type="button" class="grid h-9 w-9 place-items-center rounded-md hover:bg-neutral-light lg:hidden" @click="sidebarOpen = false">
@@ -135,7 +141,7 @@ function toggleGroup(group, index) {
                 </button>
             </div>
 
-            <nav class="h-[calc(100vh-4rem)] overflow-y-auto p-3">
+            <nav class="flex-1 overflow-y-auto p-3">
                 <Link
                     v-if="dashboardItem"
                     :href="dashboardItem.href"
@@ -186,13 +192,35 @@ function toggleGroup(group, index) {
                     </div>
                 </template>
             </nav>
+
+            <div class="border-t border-neutral-border p-2">
+                <div class="flex min-w-0 items-center gap-2">
+                    <div class="min-w-0 flex-1 px-1">
+                        <p class="truncate text-xs font-semibold text-neutral-text">{{ page.props.auth.user.name }}</p>
+                        <p class="text-[11px] capitalize leading-4 text-neutral-muted">{{ page.props.auth.user.role }}</p>
+                    </div>
+                    <Link
+                        href="/profile"
+                        class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-md border"
+                        :class="isCurrentPath('/profile') ? 'border-primary bg-primary-soft text-neutral-text' : 'border-neutral-border text-neutral-muted hover:bg-neutral-light'"
+                        title="Profil"
+                    >
+                        <User class="h-4 w-4" />
+                        <span class="sr-only">Profil</span>
+                    </Link>
+                    <Link :href="route('logout')" method="post" as="button" class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-md border border-neutral-border text-neutral-muted hover:bg-neutral-light" title="Logout">
+                        <LogOut class="h-4 w-4" />
+                        <span class="sr-only">Logout</span>
+                    </Link>
+                </div>
+            </div>
         </aside>
 
         <div v-if="sidebarOpen" class="fixed inset-0 z-40 bg-black/30 lg:hidden" @click="sidebarOpen = false" />
 
         <div class="lg:pl-72">
             <header class="sticky top-0 z-30 border-b border-neutral-border bg-white">
-                <div class="flex h-16 items-center justify-between px-4 sm:px-6">
+                <div class="flex h-16 items-center px-4 sm:px-6">
                     <div class="flex items-center gap-3">
                         <button type="button" class="grid h-10 w-10 place-items-center rounded-md border border-neutral-border lg:hidden" @click="sidebarOpen = true">
                             <Menu class="h-5 w-5" />
@@ -201,16 +229,6 @@ function toggleGroup(group, index) {
                         <div class="min-w-0">
                             <h1 class="text-lg font-semibold text-neutral-text">{{ title }}</h1>
                         </div>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <div class="hidden text-right sm:block">
-                            <p class="text-sm font-semibold text-neutral-text">{{ page.props.auth.user.name }}</p>
-                            <p class="text-xs capitalize text-neutral-muted">{{ page.props.auth.user.role }}</p>
-                        </div>
-                        <Link :href="route('logout')" method="post" as="button" class="rounded-md border border-neutral-border px-3 py-2 text-sm font-semibold text-neutral-muted hover:bg-neutral-light">
-                            Logout
-                        </Link>
                     </div>
                 </div>
             </header>

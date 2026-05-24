@@ -23,7 +23,7 @@ class CatalogController extends Controller
         ]);
 
         $products = Product::query()
-            ->with(['category:id,name,slug', 'variants:id,product_id,price,status,stock,reserved_stock', 'primaryImage:id,product_id,file_path,alt_text'])
+            ->with(['category:id,name,slug', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
             ->active()
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
@@ -61,8 +61,11 @@ class CatalogController extends Controller
 
         $product->load([
             'category:id,name,slug',
-            'images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id'),
-            'variants' => fn ($query) => $query->whereIn('status', ['aktif', 'stok_habis'])->orderBy('price')->orderBy('id'),
+            'variants' => fn ($query) => $query
+                ->whereIn('status', ['aktif', 'stok_habis'])
+                ->with(['images' => fn ($imageQuery) => $imageQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id')])
+                ->orderBy('price')
+                ->orderBy('id'),
         ]);
 
         return Inertia::render('Catalog/Show', [
@@ -72,12 +75,6 @@ class CatalogController extends Controller
                 'slug' => $product->slug,
                 'description' => $product->description,
                 'category' => $product->category?->only(['id', 'name', 'slug']),
-                'images' => $product->images->map(fn ($image) => [
-                    'id' => $image->id,
-                    'url' => MediaUrl::fromPath($image->file_path),
-                    'alt_text' => $image->alt_text ?: $product->name,
-                    'is_primary' => $image->is_primary,
-                ]),
                 'variants' => $product->variants->map(fn (ProductVariant $variant) => [
                     'id' => $variant->id,
                     'sku' => $variant->sku,
@@ -91,6 +88,12 @@ class CatalogController extends Controller
                     'available_stock' => $variant->availableStock(),
                     'status' => $variant->status,
                     'can_add_to_cart' => $variant->status === 'aktif' && $variant->availableStock() > 0,
+                    'images' => $variant->images->map(fn ($image) => [
+                        'id' => $image->id,
+                        'url' => MediaUrl::fromPath($image->file_path),
+                        'alt_text' => $image->alt_text ?: $product->name,
+                        'is_primary' => $image->is_primary,
+                    ]),
                 ]),
             ],
         ]);
@@ -106,10 +109,22 @@ class CatalogController extends Controller
             'name' => $product->name,
             'slug' => $product->slug,
             'category' => $product->category?->name,
-            'image_url' => MediaUrl::fromPath($product->primaryImage?->file_path),
+            'image_url' => MediaUrl::fromPath($this->primaryImage($product)?->file_path),
             'min_price' => (float) $activeVariants->min('price'),
             'max_price' => (float) $activeVariants->max('price'),
             'available' => $activeVariants->sum(fn (ProductVariant $variant) => $variant->availableStock()) > 0,
         ];
+    }
+
+    private function primaryImage(Product $product): ?object
+    {
+        return $product->variants
+            ->flatMap(fn ($variant) => $variant->images)
+            ->sortBy([
+                ['is_primary', 'desc'],
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->first();
     }
 }

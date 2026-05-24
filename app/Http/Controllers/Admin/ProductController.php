@@ -24,7 +24,7 @@ class ProductController extends Controller
         ]);
 
         $products = Product::query()
-            ->with(['category:id,name', 'primaryImage:id,product_id,file_path', 'variants:id,product_id,status,price,stock,reserved_stock'])
+            ->with(['category:id,name', 'variants:id,product_id,status,price,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
             ->withCount(['variants', 'orderItems'])
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where('name', 'like', "%{$keyword}%"))
             ->when($filters['category'] ?? null, fn ($query, $category) => $query->where('category_id', $category))
@@ -70,16 +70,14 @@ class ProductController extends Controller
     {
         $product->load([
             'category:id,name',
-            'images' => fn ($query) => $query
-                ->with('variant:id,variant_name,sku')
-                ->orderByDesc('is_primary')
-                ->orderBy('sort_order')
-                ->orderBy('id'),
             'variants' => fn ($query) => $query
+                ->with(['images' => fn ($imageQuery) => $imageQuery->with('variant:id,product_id,variant_name,sku')->orderBy('sort_order')->orderBy('id')])
                 ->withCount('orderItems')
                 ->orderBy('id'),
         ]);
         $product->loadCount(['variants', 'orderItems']);
+
+        $images = $product->variants->flatMap(fn ($variant) => $variant->images);
 
         return Inertia::render('Admin/Products/Show', [
             'navigationGroups' => DashboardNavigation::forUser(request()->user()),
@@ -106,9 +104,9 @@ class ProductController extends Controller
                     'status' => $variant->status,
                     'order_items_count' => $variant->order_items_count,
                 ]),
-                'images' => $product->images->map(fn ($image) => [
+                'images' => $images->map(fn ($image) => [
                     'id' => $image->id,
-                    'product_id' => $image->product_id,
+                    'product_id' => $image->variant?->product_id,
                     'product_variant_id' => $image->product_variant_id,
                     'variant_name' => $image->variant?->variant_name ?: $image->variant?->sku,
                     'url' => MediaUrl::fromPath($image->file_path),
@@ -166,13 +164,25 @@ class ProductController extends Controller
             'category' => $product->category?->name,
             'status' => $product->status,
             'is_featured' => $product->is_featured,
-            'image_url' => MediaUrl::fromPath($product->primaryImage?->file_path),
+            'image_url' => MediaUrl::fromPath($this->primaryImage($product)?->file_path),
             'variants_count' => $product->variants_count ?? $product->variants->count(),
             'order_items_count' => $product->order_items_count ?? 0,
             'min_price' => (float) $activeVariants->min('price'),
             'max_price' => (float) $activeVariants->max('price'),
             'available_stock' => $activeVariants->sum(fn ($variant) => $variant->availableStock()),
         ];
+    }
+
+    private function primaryImage(Product $product): ?object
+    {
+        return $product->variants
+            ->flatMap(fn ($variant) => $variant->images)
+            ->sortBy([
+                ['is_primary', 'desc'],
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->first();
     }
 
     private function categoryOptions(): array

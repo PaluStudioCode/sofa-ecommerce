@@ -21,8 +21,8 @@ class CatalogAndProductManagementTest extends TestCase
     public function test_guest_can_view_catalog_with_active_products_only(): void
     {
         $active = Product::factory()->create(['name' => 'Sofa Aktif', 'status' => 'aktif']);
-        ProductVariant::factory()->for($active)->create(['price' => 3000000, 'stock' => 5, 'reserved_stock' => 1, 'status' => 'aktif']);
-        ProductImage::factory()->for($active)->create(['is_primary' => true]);
+        $activeVariant = ProductVariant::factory()->for($active)->create(['price' => 3000000, 'stock' => 5, 'reserved_stock' => 1, 'status' => 'aktif']);
+        ProductImage::factory()->for($activeVariant, 'variant')->create(['is_primary' => true]);
 
         $inactive = Product::factory()->inactive()->create(['name' => 'Sofa Nonaktif']);
         ProductVariant::factory()->for($inactive)->create(['status' => 'aktif']);
@@ -67,21 +67,21 @@ class CatalogAndProductManagementTest extends TestCase
     public function test_guest_can_view_active_product_detail_with_variant_stock_and_images(): void
     {
         $product = Product::factory()->create(['status' => 'aktif']);
-        ProductImage::factory()->for($product)->create(['file_path' => 'products/detail.jpg', 'is_primary' => true]);
-        ProductVariant::factory()->for($product)->create([
+        $variant = ProductVariant::factory()->for($product)->create([
             'variant_name' => 'Premium',
             'stock' => 6,
             'reserved_stock' => 2,
             'status' => 'aktif',
         ]);
+        ProductImage::factory()->for($variant, 'variant')->create(['file_path' => 'products/detail.jpg', 'is_primary' => true]);
 
         $this->get(route('products.show', $product->slug))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Catalog/Show')
                 ->where('product.name', $product->name)
-                ->has('product.images', 1)
                 ->has('product.variants', 1)
+                ->has('product.variants.0.images', 1)
                 ->where('product.variants.0.available_stock', 4)
                 ->where('product.variants.0.can_add_to_cart', true)
             );
@@ -163,10 +163,12 @@ class CatalogAndProductManagementTest extends TestCase
 
         $admin = User::factory()->admin()->create();
         $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->for($product)->create();
 
         $this->actingAs($admin)
             ->post(route('admin.product-images.store'), [
                 'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
                 'image' => UploadedFile::fake()->image('primary.jpg'),
                 'alt_text' => 'Primary',
                 'sort_order' => 0,
@@ -180,6 +182,7 @@ class CatalogAndProductManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.product-images.store'), [
                 'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
                 'image' => UploadedFile::fake()->image('second.jpg'),
                 'alt_text' => 'Second',
                 'sort_order' => 1,
@@ -193,10 +196,44 @@ class CatalogAndProductManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.product-images.store'), [
                 'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
                 'image' => UploadedFile::fake()->create('not-image.pdf', 12, 'application/pdf'),
                 'sort_order' => 2,
             ])
             ->assertSessionHasErrors('image');
+    }
+
+    public function test_admin_can_upload_multiple_product_images_at_once(): void
+    {
+        Storage::fake('public');
+
+        $admin = User::factory()->admin()->create();
+        $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->for($product)->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.product-images.store'), [
+                'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
+                'images' => [
+                    UploadedFile::fake()->image('front.jpg'),
+                    UploadedFile::fake()->image('side.jpg'),
+                    UploadedFile::fake()->image('detail.jpg'),
+                ],
+                'alt_text' => 'Batch sofa',
+                'sort_order' => 4,
+                'is_primary' => true,
+            ])
+            ->assertRedirect();
+
+        $images = ProductImage::where('product_variant_id', $variant->id)->orderBy('sort_order')->get();
+
+        $this->assertCount(3, $images);
+        $this->assertSame([4, 5, 6], $images->pluck('sort_order')->all());
+        $this->assertSame([true, false, false], $images->pluck('is_primary')->all());
+        $this->assertTrue($images->every(fn (ProductImage $image) => $image->product_variant_id === $variant->id));
+
+        $images->each(fn (ProductImage $image) => Storage::disk('public')->assertExists($image->file_path));
     }
 
     public function test_admin_product_management_is_forbidden_for_customer(): void

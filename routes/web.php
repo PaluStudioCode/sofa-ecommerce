@@ -85,6 +85,9 @@ Route::middleware(['auth', 'verified'])
         Route::put('product-images/{product_image}/primary', [ProductImageController::class, 'primary'])
             ->middleware('permission:manage_products')
             ->name('product-images.primary');
+        Route::put('product-images/reorder', [ProductImageController::class, 'reorder'])
+            ->middleware('permission:manage_products')
+            ->name('product-images.reorder');
         Route::resource('product-images', ProductImageController::class)
             ->only(['index', 'store', 'update', 'destroy'])
             ->middleware('permission:manage_products');

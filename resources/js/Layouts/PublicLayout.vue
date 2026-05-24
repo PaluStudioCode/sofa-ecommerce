@@ -1,39 +1,66 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { Clock3, Mail, MapPin, Menu, Phone, ShoppingCart, User, X } from '@lucide/vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 
 const page = usePage();
 const open = ref(false);
+const currentPath = computed(() => page.url.split('?')[0]);
+
+function isNavActive(paths) {
+    const pathList = Array.isArray(paths) ? paths : [paths];
+
+    return pathList.some((path) => {
+        if (path === '/') {
+            return currentPath.value === '/';
+        }
+
+        return currentPath.value === path || currentPath.value.startsWith(`${path}/`);
+    });
+}
+
+function desktopNavClass(paths) {
+    return [
+        'inline-flex min-h-9 items-center gap-2 rounded-md px-3 font-semibold transition',
+        isNavActive(paths) ? 'bg-primary-soft text-neutral-text' : 'text-neutral-muted hover:bg-neutral-light hover:text-neutral-text',
+    ].join(' ');
+}
+
+function mobileNavClass(paths) {
+    return [
+        'rounded-md px-3 py-2 font-semibold transition',
+        isNavActive(paths) ? 'bg-primary-soft text-neutral-text' : 'text-neutral-muted hover:bg-neutral-light hover:text-neutral-text',
+    ].join(' ');
+}
 </script>
 
 <template>
-    <div class="min-h-screen bg-white text-neutral-text">
+    <div class="flex min-h-screen flex-col bg-white text-neutral-text">
         <header class="sticky top-0 z-40 border-b border-neutral-border bg-white/95 backdrop-blur">
             <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                 <Link href="/" class="text-lg font-bold text-neutral-text">SofaStore</Link>
 
-                <nav class="hidden items-center gap-6 text-sm font-medium text-neutral-muted md:flex">
-                    <Link href="/" class="hover:text-neutral-text">Home</Link>
-                    <Link href="/catalog" class="hover:text-neutral-text">Katalog</Link>
-                    <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" class="inline-flex items-center gap-2 hover:text-neutral-text">
+                <nav class="hidden items-center gap-2 text-sm font-medium md:flex">
+                    <Link href="/" :class="desktopNavClass('/')">Home</Link>
+                    <Link href="/catalog" :class="desktopNavClass(['/catalog', '/products'])">Katalog</Link>
+                    <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" :class="desktopNavClass('/cart')">
                         <ShoppingCart class="h-4 w-4" />
                         <span>Keranjang</span>
                     </Link>
-                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" class="inline-flex items-center gap-2 hover:text-neutral-text">
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" :class="desktopNavClass('/address')">
                         <MapPin class="h-4 w-4" />
                         <span>Alamat</span>
                     </Link>
-                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" class="hover:text-neutral-text">Riwayat Pesanan</Link>
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" :class="desktopNavClass('/orders')">Riwayat Pesanan</Link>
                 </nav>
 
                 <div class="hidden items-center gap-2 md:flex">
                     <template v-if="page.props.auth.user">
-                        <AppButton href="/profile" variant="ghost">
+                        <Link href="/profile" :class="desktopNavClass('/profile')">
                             <User class="h-4 w-4" />
                             {{ page.props.auth.user.name }}
-                        </AppButton>
+                        </Link>
                         <Link :href="route('logout')" method="post" as="button" class="rounded-md px-3 py-2 text-sm font-semibold text-neutral-muted hover:bg-neutral-light hover:text-neutral-text">
                             Logout
                         </Link>
@@ -52,12 +79,12 @@ const open = ref(false);
 
             <div v-if="open" class="border-t border-neutral-border bg-white px-4 py-4 md:hidden">
                 <nav class="grid gap-2 text-sm font-medium text-neutral-muted">
-                    <Link href="/" class="rounded-md px-3 py-2 hover:bg-neutral-light">Home</Link>
-                    <Link href="/catalog" class="rounded-md px-3 py-2 hover:bg-neutral-light">Katalog</Link>
-                    <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" class="rounded-md px-3 py-2 hover:bg-neutral-light">Keranjang</Link>
-                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" class="rounded-md px-3 py-2 hover:bg-neutral-light">Alamat</Link>
-                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" class="rounded-md px-3 py-2 hover:bg-neutral-light">Riwayat Pesanan</Link>
-                    <Link v-if="page.props.auth.user" href="/profile" class="rounded-md px-3 py-2 hover:bg-neutral-light">Akun</Link>
+                    <Link href="/" :class="mobileNavClass('/')">Home</Link>
+                    <Link href="/catalog" :class="mobileNavClass(['/catalog', '/products'])">Katalog</Link>
+                    <Link v-if="!page.props.auth.user || page.props.auth.user.role === 'customer'" href="/cart" :class="mobileNavClass('/cart')">Keranjang</Link>
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/address" :class="mobileNavClass('/address')">Alamat</Link>
+                    <Link v-if="page.props.auth.user?.role === 'customer'" href="/orders" :class="mobileNavClass('/orders')">Riwayat Pesanan</Link>
+                    <Link v-if="page.props.auth.user" href="/profile" :class="mobileNavClass('/profile')">Akun</Link>
                     <Link v-if="page.props.auth.user" :href="route('logout')" method="post" as="button" class="rounded-md px-3 py-2 text-left hover:bg-neutral-light">Logout</Link>
                     <Link v-if="!page.props.auth.user" :href="route('login')" class="rounded-md px-3 py-2 hover:bg-neutral-light">Login</Link>
                     <Link v-if="!page.props.auth.user" :href="route('register')" class="rounded-md px-3 py-2 hover:bg-neutral-light">Register</Link>
@@ -65,7 +92,7 @@ const open = ref(false);
             </div>
         </header>
 
-        <main>
+        <main class="flex-1">
             <slot />
         </main>
 

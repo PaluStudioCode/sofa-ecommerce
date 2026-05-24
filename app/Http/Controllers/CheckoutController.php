@@ -211,8 +211,8 @@ class CheckoutController extends Controller
         return CartItem::query()
             ->with([
                 'product.category:id,name',
-                'product.primaryImage:id,product_id,file_path,alt_text',
                 'variant:id,product_id,sku,variant_name,size,material,color,price,stock,reserved_stock,status',
+                'variant.images:id,product_variant_id,file_path,is_primary,sort_order',
             ])
             ->where('user_id', $request->user()->id)
             ->latest()
@@ -226,13 +226,24 @@ class CheckoutController extends Controller
             'product_name' => $item->product->name,
             'product_slug' => $item->product->slug,
             'category' => $item->product->category?->name,
-            'image_url' => MediaUrl::fromPath($item->product->primaryImage?->file_path),
+            'image_url' => MediaUrl::fromPath($this->primaryImage($item->variant)?->file_path),
             'variant_name' => $item->variant->variant_name ?: $item->variant->sku,
             'specification' => collect([$item->variant->size, $item->variant->material, $item->variant->color])->filter()->join(' / '),
             'unit_price' => (float) $item->variant->price,
             'quantity' => $item->quantity,
             'subtotal' => (float) $item->variant->price * $item->quantity,
         ];
+    }
+
+    private function primaryImage(ProductVariant $variant): ?object
+    {
+        return $variant->images
+            ->sortBy([
+                ['is_primary', 'desc'],
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->first();
     }
 
     private function quote(Collection $items, int $userId, ?array $location, string $voucherCode, bool $strict, bool $lockVoucher = false): array

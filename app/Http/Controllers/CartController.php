@@ -18,8 +18,8 @@ class CartController extends Controller
         $items = CartItem::query()
             ->with([
                 'product.category:id,name',
-                'product.primaryImage:id,product_id,file_path,alt_text',
                 'variant:id,product_id,sku,variant_name,size,material,color,price,stock,reserved_stock,status',
+                'variant.images:id,product_variant_id,file_path,is_primary,sort_order',
             ])
             ->where('user_id', $request->user()->id)
             ->latest()
@@ -110,7 +110,7 @@ class CartController extends Controller
             'product_name' => $product?->name,
             'product_slug' => $product?->slug,
             'category' => $product?->category?->name,
-            'image_url' => MediaUrl::fromPath($product?->primaryImage?->file_path),
+            'image_url' => MediaUrl::fromPath($this->primaryImage($variant)?->file_path),
             'variant_name' => $variant?->variant_name ?: $variant?->sku,
             'sku' => $variant?->sku,
             'size' => $variant?->size,
@@ -125,6 +125,17 @@ class CartController extends Controller
             'is_valid' => $warning === null,
             'warning' => $warning,
         ];
+    }
+
+    private function primaryImage(?ProductVariant $variant): ?object
+    {
+        return $variant?->images
+            ->sortBy([
+                ['is_primary', 'desc'],
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->first();
     }
 
     private function warningFor(CartItem $item, int $availableStock): ?string

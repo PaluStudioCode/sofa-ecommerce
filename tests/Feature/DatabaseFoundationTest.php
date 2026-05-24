@@ -58,7 +58,7 @@ class DatabaseFoundationTest extends TestCase
         $category = Category::factory()->create();
         $product = Product::factory()->for($category)->create();
         $variant = ProductVariant::factory()->for($product)->create(['reserved_stock' => 0]);
-        $image = ProductImage::factory()->for($product)->create();
+        $image = ProductImage::factory()->for($variant, 'variant')->create();
         $cartItem = CartItem::factory()->create([
             'user_id' => $user->id,
             'product_id' => $product->id,
@@ -84,7 +84,8 @@ class DatabaseFoundationTest extends TestCase
 
         $this->assertSame($category->id, $product->category->id);
         $this->assertSame($product->id, $variant->product->id);
-        $this->assertSame($product->id, $image->product->id);
+        $this->assertSame($variant->id, $image->variant->id);
+        $this->assertSame($product->id, $image->variant->product->id);
         $this->assertSame($variant->id, $cartItem->variant->id);
         $this->assertSame($order->id, $orderItem->order->id);
         $this->assertSame($order->id, $payment->order->id);
