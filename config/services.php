@@ -56,6 +56,13 @@ return [
         'base_url' => env('FONNTE_BASE_URL', 'https://api.fonnte.com'),
     ],
 
+    'routing' => [
+        'osrm_base_url' => env('OSRM_BASE_URL', 'https://router.project-osrm.org'),
+        'connect_timeout' => (int) env('OSRM_CONNECT_TIMEOUT', 2),
+        'timeout' => (int) env('OSRM_TIMEOUT', 5),
+        'cache_ttl_minutes' => (int) env('OSRM_CACHE_TTL_MINUTES', 360),
+    ],
+
     'ngrok' => [
         'url' => env('NGROK_URL'),
         'authtoken' => env('NGROK_AUTHTOKEN'),

@@ -55,6 +55,13 @@ class ShippingAreaController extends Controller
             'longitude' => [$shippingSetting ? 'nullable' : 'required', 'numeric', 'between:-180,180'],
             'radius_km' => ['required', 'numeric', 'gt:0', 'max:1000'],
             'shipping_cost' => ['required', 'numeric', 'min:0'],
+        ], [], [
+            'name' => 'nama titik asal',
+            'description' => 'alamat/catatan titik asal',
+            'latitude' => 'latitude titik asal',
+            'longitude' => 'longitude titik asal',
+            'radius_km' => 'batas jarak jalan maksimal',
+            'shipping_cost' => 'tarif ongkir per KM',
         ]);
 
         $latitude = filled($data['latitude'] ?? null)

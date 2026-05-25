@@ -1,5 +1,5 @@
 <script setup>
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
@@ -26,6 +26,33 @@ function formDefaults(setting = null) {
 }
 
 const form = useForm(formDefaults(props.setting));
+
+const coordinateSummary = computed(() => {
+    const latitude = Number(form.latitude);
+    const longitude = Number(form.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return 'Belum dipilih';
+    }
+
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+});
+
+const distanceLimitSummary = computed(() => {
+    const limit = Number(form.radius_km);
+
+    if (!Number.isFinite(limit) || limit <= 0) {
+        return '-';
+    }
+
+    return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(limit)} km`;
+});
+
+const shippingCostSummary = computed(() => new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+}).format(Number(form.shipping_cost || 0)));
 
 watch(
     () => props.setting,
@@ -59,12 +86,12 @@ function submitSetting() {
             <h2 class="text-xl font-semibold text-neutral-text">Pengaturan ongkir toko</h2>
         </div>
 
-        <form class="grid items-start gap-5 lg:grid-cols-[minmax(0,420px)_1fr]" @submit.prevent="submitSetting">
+        <form class="grid items-start gap-5 xl:grid-cols-[minmax(360px,440px)_minmax(0,1fr)]" @submit.prevent="submitSetting">
             <section class="grid gap-4 rounded-md border border-neutral-border bg-white p-5">
                 <FormInput id="shipping_name" v-model="form.name" label="Nama titik asal" :error="form.errors.name" required />
 
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <FormInput id="shipping_radius_km" v-model="form.radius_km" type="number" label="Radius layanan maksimal (km)" :error="form.errors.radius_km" required />
+                    <FormInput id="shipping_radius_km" v-model="form.radius_km" type="number" label="Batas jarak jalan maksimal (km)" :error="form.errors.radius_km" required />
                     <FormInput id="shipping_cost" v-model="form.shipping_cost" type="number" label="Tarif ongkir per KM (Rp)" :error="form.errors.shipping_cost" required />
                 </div>
 
@@ -81,6 +108,21 @@ function submitSetting() {
 
                 <p v-if="form.errors.is_active" class="text-sm text-danger">{{ form.errors.is_active }}</p>
 
+                <div class="grid gap-2 border-t border-neutral-border pt-4 text-sm">
+                    <div class="flex justify-between gap-3">
+                        <span class="text-neutral-muted">Titik asal</span>
+                        <span class="text-right font-semibold text-neutral-text">{{ coordinateSummary }}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <span class="text-neutral-muted">Batas jarak jalan</span>
+                        <span class="font-semibold text-neutral-text">{{ distanceLimitSummary }}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <span class="text-neutral-muted">Tarif per KM</span>
+                        <span class="font-semibold text-neutral-text">{{ shippingCostSummary }}</span>
+                    </div>
+                </div>
+
                 <div class="pt-2">
                     <AppButton type="submit" :loading="form.processing">
                         <Save class="h-4 w-4" />
@@ -93,19 +135,13 @@ function submitSetting() {
                 v-model:latitude="form.latitude"
                 v-model:longitude="form.longitude"
                 class="self-start"
-                title="Titik asal pengiriman dan radius"
+                title="Titik asal pengiriman"
                 marker-label="Titik asal belum dipilih"
                 helper="Cari alamat, klik peta, atau gunakan GPS untuk menentukan titik asal pengiriman."
                 search-placeholder="Cari alamat titik asal"
                 current-location-label="Gunakan GPS"
-                :radius-km="form.radius_km"
-                :show-radius="true"
                 :error="form.errors.latitude || form.errors.longitude"
-            >
-                <template #actions>
-                    <span class="text-xs text-neutral-muted">{{ Number(form.radius_km || 0) }} km</span>
-                </template>
-            </LeafletLocationPicker>
+            />
         </form>
     </AuthenticatedLayout>
 </template>

@@ -6,6 +6,7 @@ import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
+import LeafletRoutePreview from '@/Components/UI/LeafletRoutePreview.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import VoucherInput from '@/Components/UI/VoucherInput.vue';
 
@@ -107,30 +108,43 @@ function submitOrder() {
 
                         <section class="rounded-md border border-neutral-border bg-white p-5">
                             <h2 class="text-lg font-semibold text-neutral-text">Kontak dan alamat</h2>
-                            <div class="mt-4 grid gap-4">
-                                <section class="rounded-md border border-neutral-border bg-neutral-light p-4">
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                        <div class="flex items-start gap-3">
-                                            <MapPin class="mt-0.5 h-5 w-5 shrink-0 text-info" />
-                                            <div>
-                                                <div class="flex flex-wrap items-center gap-2">
-                                                    <h3 class="text-base font-semibold text-neutral-text">Alamat pengiriman</h3>
-                                                    <StatusBadge :status="isAddressReady ? 'aktif' : 'pending'" :label="isAddressReady ? 'Lengkap' : 'Belum lengkap'" />
-                                                </div>
-                                                <p v-if="props.location?.recipient_name || props.location?.phone" class="mt-2 text-sm font-semibold text-neutral-text">
-                                                    {{ [props.location?.recipient_name, props.location?.phone].filter(Boolean).join(' - ') }}
-                                                </p>
-                                                <p v-if="hasSavedAddress" class="mt-2 text-sm font-semibold text-neutral-text">{{ location.formatted_address }}</p>
-                                                <p v-if="hasSavedAddress && location.detail" class="mt-1 text-sm text-neutral-muted">{{ location.detail }}</p>
-                                                <p v-if="hasSavedAddress && addressMeta" class="mt-1 text-sm text-neutral-muted">{{ addressMeta }}</p>
-                                                <p v-if="hasSavedAddress" class="mt-1 text-xs text-neutral-muted">{{ Number(location.latitude).toFixed(6) }}, {{ Number(location.longitude).toFixed(6) }}</p>
-                                                <p v-if="!isAddressReady" class="mt-2 text-sm text-neutral-muted">Lengkapi nama penerima, telepon, detail alamat, dan titik pengiriman agar ongkir bisa dihitung.</p>
+                            <div class="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)] xl:items-start">
+                                <div class="flex min-w-0 flex-col justify-between gap-4">
+                                    <div class="flex items-start gap-3">
+                                        <MapPin class="mt-0.5 h-5 w-5 shrink-0 text-info" />
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h3 class="text-base font-semibold text-neutral-text">Alamat pengiriman</h3>
+                                                <StatusBadge :status="isAddressReady ? 'aktif' : 'pending'" :label="isAddressReady ? 'Lengkap' : 'Belum lengkap'" />
                                             </div>
+                                            <p v-if="props.location?.recipient_name || props.location?.phone" class="mt-2 text-sm font-semibold text-neutral-text">
+                                                {{ [props.location?.recipient_name, props.location?.phone].filter(Boolean).join(' - ') }}
+                                            </p>
+                                            <p v-if="hasSavedAddress" class="mt-2 text-sm font-semibold leading-6 text-neutral-text">{{ location.formatted_address }}</p>
+                                            <p v-if="hasSavedAddress && location.detail" class="mt-1 text-sm leading-6 text-neutral-muted">{{ location.detail }}</p>
+                                            <p v-if="hasSavedAddress && addressMeta" class="mt-1 text-sm text-neutral-muted">{{ addressMeta }}</p>
+                                            <p v-if="hasSavedAddress" class="mt-1 text-xs text-neutral-muted">{{ Number(location.latitude).toFixed(6) }}, {{ Number(location.longitude).toFixed(6) }}</p>
+                                            <p v-if="!isAddressReady" class="mt-2 text-sm text-neutral-muted">Lengkapi nama penerima, telepon, detail alamat, dan titik pengiriman agar ongkir bisa dihitung.</p>
                                         </div>
-                                        <AppButton href="/address" variant="secondary">{{ isAddressReady ? 'Ubah Alamat' : 'Lengkapi Alamat' }}</AppButton>
                                     </div>
-                                    <p v-if="quoteForm.errors.location || orderForm.errors.location" class="mt-3 text-sm text-danger">{{ quoteForm.errors.location || orderForm.errors.location }}</p>
-                                </section>
+
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <p v-if="quoteForm.errors.location || orderForm.errors.location" class="text-sm text-danger">{{ quoteForm.errors.location || orderForm.errors.location }}</p>
+                                        <AppButton href="/address" variant="secondary" class="w-full sm:w-auto">{{ isAddressReady ? 'Ubah Alamat' : 'Lengkapi Alamat' }}</AppButton>
+                                    </div>
+                                </div>
+
+                                <div v-if="summary.store && hasSavedAddress" class="min-w-0">
+                                    <LeafletRoutePreview
+                                        :origin-latitude="summary.store.origin_latitude"
+                                        :origin-longitude="summary.store.origin_longitude"
+                                        :destination-latitude="location.latitude"
+                                        :destination-longitude="location.longitude"
+                                        :route-geometry="summary.store.route_geometry || []"
+                                        :origin-label="summary.store.name"
+                                        :destination-label="location.formatted_address"
+                                    />
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -164,7 +178,7 @@ function submitOrder() {
                                 <span class="text-right font-semibold text-neutral-text">{{ summary.store.name }}</span>
                             </div>
                             <div v-if="summary.store" class="flex justify-between gap-3">
-                                <span class="text-neutral-muted">Jarak alamat</span>
+                                <span class="text-neutral-muted">Jarak jalan</span>
                                 <span class="text-right font-semibold text-neutral-text">{{ formatKilometer(summary.store.distance_km) }} km</span>
                             </div>
                             <div class="flex justify-between gap-3 border-t border-neutral-border pt-3 text-base">

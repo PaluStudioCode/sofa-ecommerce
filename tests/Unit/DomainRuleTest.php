@@ -7,10 +7,12 @@ use App\Models\ProductVariant;
 use App\Models\User;
 use App\Services\Midtrans\HttpMidtransPaymentGateway;
 use App\Services\Orders\OrderStatusTransitionService;
+use App\Services\Shipping\RouteDistanceService;
 use App\Services\Vouchers\VoucherStatusService;
 use App\Support\GeoDistance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -82,6 +84,47 @@ class DomainRuleTest extends TestCase
 
         $this->assertLessThan(1000, $nearDistance);
         $this->assertGreaterThan(100000, $farDistance);
+    }
+
+    public function test_route_distance_service_reads_openstreetmap_driving_distance(): void
+    {
+        config(['services.routing.osrm_base_url' => 'https://router.test']);
+        Http::fake([
+            'router.test/*' => Http::response([
+                'code' => 'Ok',
+                'routes' => [
+                    [
+                        'distance' => 8600.5,
+                        'duration' => 1200.0,
+                        'geometry' => [
+                            'type' => 'LineString',
+                            'coordinates' => [
+                                [106.816666, -6.2],
+                                [106.818, -6.205],
+                                [106.82, -6.21],
+                            ],
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $distance = app(RouteDistanceService::class)->drivingDistance(
+            -6.2,
+            106.816666,
+            -6.21,
+            106.82
+        );
+
+        $this->assertSame('osrm', $distance['provider']);
+        $this->assertSame(8600.5, $distance['distance_meters']);
+        $this->assertSame(1200.0, $distance['duration_seconds']);
+        $this->assertSame([
+            ['latitude' => -6.2, 'longitude' => 106.816666],
+            ['latitude' => -6.205, 'longitude' => 106.818],
+            ['latitude' => -6.21, 'longitude' => 106.82],
+        ], $distance['route_geometry']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '106.81666600,-6.20000000;106.82000000,-6.21000000'));
     }
 
     public function test_order_status_transition_rules_accept_valid_and_reject_invalid_paths(): void

@@ -11,6 +11,7 @@ use App\Models\UserAddress;
 use App\Models\Voucher;
 use App\Services\Notifications\WhatsAppNotificationService;
 use App\Services\Payments\PaymentAttemptService;
+use App\Services\Shipping\RouteDistanceService;
 use App\Services\Vouchers\VoucherStatusService;
 use App\Support\GeoDistance;
 use App\Support\MediaUrl;
@@ -18,13 +19,17 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class CheckoutController extends Controller
 {
+    public function __construct(private readonly RouteDistanceService $routeDistance) {}
+
     public function index(Request $request): Response|RedirectResponse
     {
         $items = $this->cartItems($request);
@@ -269,7 +274,7 @@ class CheckoutController extends Controller
 
         if ($strict && ! $shippingRule) {
             throw ValidationException::withMessages([
-                'location' => 'Alamat belum masuk radius layanan pengiriman.',
+                'location' => 'Alamat belum masuk radius layanan pengiriman atau jarak jalan belum dapat dihitung.',
             ]);
         }
 
@@ -301,6 +306,9 @@ class CheckoutController extends Controller
                 'shipping_cost_per_km' => (float) $shippingSetting->shipping_cost_per_km,
                 'distance_km' => $shippingRule['distance_km'],
                 'billable_distance_km' => $shippingRule['billable_distance_km'],
+                'duration_seconds' => $shippingRule['duration_seconds'],
+                'distance_provider' => $shippingRule['distance_provider'],
+                'route_geometry' => $shippingRule['route_geometry'],
             ] : null,
             'voucher' => $voucher ? [
                 'id' => $voucher->id,
@@ -348,14 +356,43 @@ class CheckoutController extends Controller
             return null;
         }
 
-        $distanceMeters = GeoDistance::haversineMeters(
+        $straightDistanceMeters = GeoDistance::haversineMeters(
             (float) $shippingSetting->origin_latitude,
             (float) $shippingSetting->origin_longitude,
             $latitude,
             $longitude
         );
 
-        if ($distanceMeters > ((float) $shippingSetting->radius_km * 1000)) {
+        $radiusMeters = (float) $shippingSetting->radius_km * 1000;
+
+        if ($straightDistanceMeters > $radiusMeters) {
+            return null;
+        }
+
+        try {
+            $routeDistance = $this->routeDistance->drivingDistance(
+                (float) $shippingSetting->origin_latitude,
+                (float) $shippingSetting->origin_longitude,
+                $latitude,
+                $longitude
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Shipping route distance lookup failed.', [
+                'shipping_setting_id' => $shippingSetting->id,
+                'origin_latitude' => (float) $shippingSetting->origin_latitude,
+                'origin_longitude' => (float) $shippingSetting->origin_longitude,
+                'destination_latitude' => $latitude,
+                'destination_longitude' => $longitude,
+                'exception_class' => $exception::class,
+                'exception_message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $distanceMeters = (float) $routeDistance['distance_meters'];
+
+        if ($distanceMeters > $radiusMeters) {
             return null;
         }
 
@@ -366,6 +403,9 @@ class CheckoutController extends Controller
             'shipping_setting' => $shippingSetting,
             'distance_km' => round($distanceKm, 2),
             'billable_distance_km' => $billableDistanceKm,
+            'duration_seconds' => $routeDistance['duration_seconds'],
+            'distance_provider' => $routeDistance['provider'],
+            'route_geometry' => $routeDistance['route_geometry'] ?? [],
             'shipping_cost' => $billableDistanceKm * (float) $shippingSetting->shipping_cost_per_km,
         ];
     }
