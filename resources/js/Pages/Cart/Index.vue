@@ -6,7 +6,6 @@ import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import QuantityStepper from '@/Components/UI/QuantityStepper.vue';
-import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import { useConfirm } from '@/Composables/useFeedback';
 
 defineProps({
@@ -84,7 +83,6 @@ async function removeItem(item) {
                                             </Link>
                                             <p class="mt-1 text-sm text-neutral-muted">{{ item.category || 'Tanpa kategori' }}</p>
                                         </div>
-                                        <StatusBadge :status="item.is_valid ? 'aktif' : 'stok_habis'" :label="item.is_valid ? 'Siap checkout' : 'Perlu dicek'" />
                                     </div>
 
                                     <dl class="mt-3 grid gap-2 text-sm text-neutral-muted sm:grid-cols-2">

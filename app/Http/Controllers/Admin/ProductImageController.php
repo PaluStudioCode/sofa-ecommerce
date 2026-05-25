@@ -142,7 +142,10 @@ class ProductImageController extends Controller
 
         DB::transaction(function () use ($data, $images) {
             foreach (array_values($data['image_ids']) as $index => $imageId) {
-                $images[$imageId]->update(['sort_order' => $index]);
+                $images[$imageId]->update([
+                    'sort_order' => $index,
+                    'is_primary' => $index === 0,
+                ]);
             }
         });
 
@@ -170,8 +173,26 @@ class ProductImageController extends Controller
 
     public function primary(ProductImage $productImage): RedirectResponse
     {
-        ProductImage::where('product_variant_id', $productImage->product_variant_id)->update(['is_primary' => false]);
-        $productImage->update(['is_primary' => true]);
+        $images = ProductImage::query()
+            ->where('product_variant_id', $productImage->product_variant_id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        DB::transaction(function () use ($images, $productImage) {
+            $orderedImageIds = $images
+                ->pluck('id')
+                ->reject(fn (int $imageId) => $imageId === $productImage->id)
+                ->prepend($productImage->id)
+                ->values();
+
+            foreach ($orderedImageIds as $index => $imageId) {
+                $images->firstWhere('id', $imageId)?->update([
+                    'sort_order' => $index,
+                    'is_primary' => $index === 0,
+                ]);
+            }
+        });
 
         return back()->with('success', 'Gambar utama diperbarui.');
     }

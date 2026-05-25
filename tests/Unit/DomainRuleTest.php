@@ -4,10 +4,9 @@ namespace Tests\Unit;
 
 use App\Models\Order;
 use App\Models\ProductVariant;
-use App\Models\Shipment;
+use App\Models\User;
 use App\Services\Midtrans\HttpMidtransPaymentGateway;
 use App\Services\Orders\OrderStatusTransitionService;
-use App\Services\Shipping\ShipmentStatusTransitionService;
 use App\Services\Vouchers\VoucherStatusService;
 use App\Support\GeoDistance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,7 +20,7 @@ class DomainRuleTest extends TestCase
 
     public function test_stock_available_never_goes_below_zero(): void
     {
-        $variant = ProductVariant::factory()->make([
+        $variant = new ProductVariant([
             'stock' => 3,
             'reserved_stock' => 5,
         ]);
@@ -88,26 +87,23 @@ class DomainRuleTest extends TestCase
     public function test_order_status_transition_rules_accept_valid_and_reject_invalid_paths(): void
     {
         $service = app(OrderStatusTransitionService::class);
-        $order = Order::factory()->paid()->create();
+        $user = User::query()->create([
+            'name' => 'Customer',
+            'email' => 'customer@example.test',
+            'password' => 'password',
+        ]);
+        $order = Order::query()->create([
+            'order_number' => 'ORD-UNIT-001',
+            'user_id' => $user->id,
+            'order_status' => 'diproses',
+        ]);
 
-        $service->updateByAdmin($order, 'diproses');
+        $service->updateByAdmin($order, 'dalam_perjalanan');
 
-        $this->assertSame('diproses', $order->fresh()->order_status);
-
-        $this->expectException(ValidationException::class);
-
-        $service->updateByAdmin($order->fresh(), 'selesai');
-    }
-
-    public function test_shipment_status_transition_rules_accept_valid_and_reject_invalid_paths(): void
-    {
-        $service = new ShipmentStatusTransitionService();
-        $shipment = Shipment::factory()->make(['status' => 'dijadwalkan']);
-
-        $service->assertCanTransition($shipment, 'dalam_pengiriman');
+        $this->assertSame('dalam_perjalanan', $order->fresh()->order_status);
 
         $this->expectException(ValidationException::class);
 
-        $service->assertCanTransition($shipment, 'terkirim');
+        $service->updateByAdmin($order->fresh(), 'diproses');
     }
 }

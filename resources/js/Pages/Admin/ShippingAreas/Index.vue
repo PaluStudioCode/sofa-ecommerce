@@ -37,7 +37,6 @@ const columns = [
     { key: 'name', label: 'Titik asal' },
     { key: 'radius_km', label: 'Radius' },
     { key: 'shipping_cost', label: 'Tarif per KM' },
-    { key: 'orders_count', label: 'Order' },
     { key: 'is_active', label: 'Status' },
 ];
 
@@ -91,7 +90,7 @@ function submitArea() {
 async function destroyArea(area) {
     if (await confirm({
         title: 'Hapus aturan ongkir?',
-        message: `Aturan ongkir ${area.name} akan dihapus atau dinonaktifkan jika sudah dipakai.`,
+        message: `Aturan ongkir ${area.name} akan dihapus.`,
         confirmText: 'Hapus',
         tone: 'danger',
     })) {

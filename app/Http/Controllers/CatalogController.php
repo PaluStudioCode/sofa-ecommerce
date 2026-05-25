@@ -63,7 +63,7 @@ class CatalogController extends Controller
             'category:id,name,slug',
             'variants' => fn ($query) => $query
                 ->whereIn('status', ['aktif', 'stok_habis'])
-                ->with(['images' => fn ($imageQuery) => $imageQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id')])
+                ->with(['images' => fn ($imageQuery) => $imageQuery->orderBy('sort_order')->orderBy('id')])
                 ->orderBy('price')
                 ->orderBy('id'),
         ]);

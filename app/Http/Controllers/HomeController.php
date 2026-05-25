@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\LandingSection;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Voucher;
@@ -24,21 +23,7 @@ class HomeController extends Controller
 
         $voucherStatuses->syncAll();
 
-        $sections = LandingSection::query()
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get()
-            ->map(fn (LandingSection $section) => [
-                'id' => $section->id,
-                'section_key' => $section->section_key,
-                'title' => $section->title,
-                'subtitle' => $section->subtitle,
-                'content' => $section->content,
-                'image_url' => MediaUrl::fromPath($section->image_path),
-                'button_label' => $section->button_label,
-                'button_url' => $section->button_url,
-                'sort_order' => $section->sort_order,
-            ]);
+        $sections = collect();
 
         $featuredProducts = Product::query()
             ->with(['category:id,name', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
@@ -53,7 +38,8 @@ class HomeController extends Controller
             ->where('start_at', '<=', now())
             ->where('end_at', '>=', now())
             ->where(function ($query) {
-                $query->whereNull('quota')->orWhereColumn('used_count', '<', 'quota');
+                $query->whereNull('quota')
+                    ->orWhereRaw('(select count(*) from order_voucher_snapshots where order_voucher_snapshots.voucher_id = vouchers.id) < vouchers.quota');
             })
             ->orderBy('end_at')
             ->first();

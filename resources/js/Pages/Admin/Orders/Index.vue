@@ -18,14 +18,12 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
     orderStatusOptions: { type: Array, default: () => [] },
     paymentStatusOptions: { type: Array, default: () => [] },
-    shipmentStatusOptions: { type: Array, default: () => [] },
 });
 
 const form = useForm({
     keyword: props.filters.keyword || '',
     order_status: props.filters.order_status || '',
     payment_status: props.filters.payment_status || '',
-    shipment_status: props.filters.shipment_status || '',
     date_from: props.filters.date_from || '',
     date_to: props.filters.date_to || '',
 });
@@ -36,11 +34,10 @@ const columns = [
     { key: 'total_amount', label: 'Total' },
     { key: 'payment', label: 'Pembayaran' },
     { key: 'order_status', label: 'Status Order' },
-    { key: 'shipment_status', label: 'Kirim' },
     { key: 'created_at', label: 'Tanggal' },
 ];
 
-useAutoFilter(form, ['keyword', 'order_status', 'payment_status', 'shipment_status', 'date_from', 'date_to'], 'admin.orders.index');
+useAutoFilter(form, ['keyword', 'order_status', 'payment_status', 'date_from', 'date_to'], 'admin.orders.index');
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -68,11 +65,10 @@ function formatDate(value) {
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen pesanan</h2>
         </div>
 
-        <form class="mb-4 grid min-w-0 gap-3 rounded-md border border-neutral-border bg-white p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(0,1fr))]" @submit.prevent>
+        <form class="mb-4 grid min-w-0 gap-3 rounded-md border border-neutral-border bg-white p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(0,1fr))]" @submit.prevent>
             <FormInput id="keyword" v-model="form.keyword" class="sm:col-span-2 xl:col-span-1" label="Keyword" placeholder="Nomor, customer, telepon, email" />
             <FormSelect id="order_status" v-model="form.order_status" label="Order" :options="orderStatusOptions" />
             <FormSelect id="payment_status" v-model="form.payment_status" label="Pembayaran" :options="paymentStatusOptions" />
-            <FormSelect id="shipment_status" v-model="form.shipment_status" label="Pengiriman" :options="shipmentStatusOptions" />
             <FormInput id="date_from" v-model="form.date_from" type="date" label="Dari" :error="form.errors.date_from" />
             <FormInput id="date_to" v-model="form.date_to" type="date" label="Sampai" :error="form.errors.date_to" />
         </form>
@@ -103,7 +99,6 @@ function formatDate(value) {
                 </div>
             </template>
             <template #cell-order_status="{ value }"><StatusBadge :status="value" /></template>
-            <template #cell-shipment_status="{ value }"><StatusBadge :status="value" /></template>
             <template #cell-created_at="{ value }">{{ formatDate(value) }}</template>
             <template #actions="{ row }">
                 <AppButton :href="route('admin.orders.show', row.id)" variant="secondary" size="sm">

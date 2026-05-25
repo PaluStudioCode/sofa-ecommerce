@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CartItem;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,7 +43,12 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
-            'storeContact' => config('app.store_contact'),
+            'cart' => [
+                'items_count' => fn () => $request->user()?->isCustomer()
+                    ? (int) CartItem::where('user_id', $request->user()->id)->sum('quantity')
+                    : 0,
+            ],
+            'storeContact' => fn () => SystemSetting::storeContact(),
         ];
     }
 }

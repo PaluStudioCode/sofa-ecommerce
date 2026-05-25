@@ -302,7 +302,7 @@ watch(() => [props.latitude, props.longitude, props.radiusKm], () => updateLayer
 </script>
 
 <template>
-    <section class="overflow-hidden rounded-md border border-neutral-border bg-white">
+    <section class="relative z-0 h-fit overflow-hidden rounded-md border border-neutral-border bg-white">
         <div class="flex flex-col gap-3 border-b border-neutral-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <div class="flex items-center gap-2 text-sm font-semibold text-neutral-text">
@@ -315,7 +315,7 @@ watch(() => [props.latitude, props.longitude, props.radiusKm], () => updateLayer
         </div>
 
         <div class="grid gap-3 p-4">
-            <div ref="mapEl" class="h-80 min-h-80 w-full overflow-hidden rounded-md border border-neutral-border bg-neutral-light"></div>
+            <div ref="mapEl" class="relative z-0 h-80 min-h-80 w-full overflow-hidden rounded-md border border-neutral-border bg-neutral-light"></div>
 
             <div class="grid gap-2 rounded-md bg-neutral-light p-3 text-sm">
                 <div class="flex items-start gap-2">
@@ -330,3 +330,27 @@ watch(() => [props.latitude, props.longitude, props.radiusKm], () => updateLayer
         </div>
     </section>
 </template>
+
+<style scoped>
+:deep(.leaflet-top),
+:deep(.leaflet-bottom) {
+    z-index: 10;
+}
+
+:deep(.leaflet-pane) {
+    z-index: 1;
+}
+
+:deep(.leaflet-overlay-pane) {
+    z-index: 2;
+}
+
+:deep(.leaflet-marker-pane) {
+    z-index: 3;
+}
+
+:deep(.leaflet-tooltip-pane),
+:deep(.leaflet-popup-pane) {
+    z-index: 4;
+}
+</style>

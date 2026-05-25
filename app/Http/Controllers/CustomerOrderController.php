@@ -14,7 +14,7 @@ class CustomerOrderController extends Controller
     public function index(Request $request): Response
     {
         $orders = Order::query()
-            ->with(['items:id,order_id,product_name,variant_name,quantity,subtotal', 'payments' => fn ($query) => $query->latest('attempt_number'), 'shipment:id,order_id,status,scheduled_at,delivered_at,driver_name'])
+            ->with(['items:id,order_id,product_name,variant_name,quantity,subtotal', 'total', 'delivery', 'payments' => fn ($query) => $query->latest('attempt_number')])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->paginate(8)
@@ -30,11 +30,14 @@ class CustomerOrderController extends Controller
         abort_unless($order->user_id === $request->user()->id, 404);
 
         $order->load([
+            'user:id,name,email,phone',
+            'address',
+            'total',
+            'delivery',
+            'voucherSnapshot',
+            'shippingSnapshot',
             'items:id,order_id,product_name,variant_name,variant_sku,variant_size,variant_material,variant_color,product_price,quantity,subtotal',
             'payments' => fn ($query) => $query->latest('attempt_number'),
-            'shipment:id,order_id,status,scheduled_at,delivered_at,driver_name,driver_phone,vehicle_note,shipping_note',
-            'voucher:id,code,name,status',
-            'store:id,name',
         ]);
 
         return Inertia::render('Orders/Show', [
@@ -46,7 +49,6 @@ class CustomerOrderController extends Controller
     private function summaryPayload(Order $order): array
     {
         $latestPayment = $order->payments->first();
-        $shipmentStatus = $order->shipment?->status ?? 'belum_dijadwalkan';
 
         return [
             'id' => $order->id,
@@ -55,14 +57,8 @@ class CustomerOrderController extends Controller
             'total_amount' => (float) $order->total_amount,
             'order_status' => $order->order_status,
             'payment_status' => $order->payment_status,
-            'shipment_status' => $shipmentStatus,
-            'shipment_label' => $this->shipmentLabel($shipmentStatus),
             'shipment_summary' => $this->shipmentSummary($order),
-            'shipment' => $order->shipment ? [
-                'status' => $order->shipment->status,
-                'scheduled_at' => $order->shipment->scheduled_at?->toIso8601String(),
-                'delivered_at' => $order->shipment->delivered_at?->toIso8601String(),
-            ] : null,
+            'shipment' => $this->shipmentPayload($order),
             'items_count' => $order->items->sum('quantity'),
             'latest_payment' => $latestPayment ? [
                 'attempt_number' => $latestPayment->attempt_number,
@@ -77,22 +73,24 @@ class CustomerOrderController extends Controller
         $latestPayment = $order->payments->first();
         $hasPendingPayment = $order->payments->contains('status', 'pending');
         $hasSuccessPayment = $order->payments->contains('status', 'success');
-        $shipmentStatus = $order->shipment?->status ?? 'belum_dijadwalkan';
+        $address = $order->address;
+        $voucher = $order->voucherSnapshot;
+        $shipping = $order->shippingSnapshot;
 
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
             'created_at' => $order->created_at?->toIso8601String(),
-            'customer_name' => $order->customer_name,
-            'customer_phone' => $order->customer_phone,
-            'shipping_address' => $order->shipping_address,
-            'shipping_city' => $order->shipping_city,
-            'shipping_district' => $order->shipping_district,
-            'shipping_postal_code' => $order->shipping_postal_code,
-            'shipping_note' => $order->shipping_note,
-            'store' => $order->store ? [
-                'id' => $order->store->id,
-                'name' => $order->store->name,
+            'customer_name' => $address?->recipient_name ?: $order->user?->name,
+            'customer_phone' => $address?->phone ?: $order->user?->phone,
+            'shipping_address' => $address?->formatted_address,
+            'shipping_city' => $address?->city,
+            'shipping_district' => $address?->district,
+            'shipping_postal_code' => $address?->postal_code,
+            'shipping_note' => collect([$address?->detail, $order->customer_note])->filter()->join("\n\n") ?: null,
+            'store' => $shipping ? [
+                'id' => $shipping->shipping_setting_id,
+                'name' => $shipping->origin_name,
             ] : null,
             'subtotal_amount' => (float) $order->subtotal_amount,
             'discount_amount' => (float) $order->discount_amount,
@@ -100,13 +98,11 @@ class CustomerOrderController extends Controller
             'total_amount' => (float) $order->total_amount,
             'order_status' => $order->order_status,
             'payment_status' => $order->payment_status,
-            'shipment_status' => $shipmentStatus,
-            'shipment_label' => $this->shipmentLabel($shipmentStatus),
             'shipment_summary' => $this->shipmentSummary($order),
-            'voucher' => $order->voucher ? [
-                'code' => $order->voucher->code,
-                'name' => $order->voucher->name,
-                'status' => $order->voucher->status,
+            'voucher' => $voucher ? [
+                'code' => $voucher->voucher_code,
+                'name' => $voucher->voucher_name,
+                'status' => $order->voucher?->status,
             ] : null,
             'items' => $order->items->map(fn ($item) => [
                 'product_name' => $item->product_name,
@@ -121,17 +117,9 @@ class CustomerOrderController extends Controller
             ])->values(),
             'payment' => $latestPayment ? $this->paymentPayload($latestPayment) : null,
             'payments' => $order->payments->map(fn (Payment $payment) => $this->paymentPayload($payment))->values(),
-            'shipment' => $order->shipment ? [
-                'status' => $order->shipment->status,
-                'scheduled_at' => $order->shipment->scheduled_at?->toIso8601String(),
-                'delivered_at' => $order->shipment->delivered_at?->toIso8601String(),
-                'driver_name' => $order->shipment->driver_name,
-                'driver_phone' => $order->shipment->driver_phone,
-                'vehicle_note' => $order->shipment->vehicle_note,
-                'shipping_note' => $order->shipment->shipping_note,
-            ] : null,
+            'shipment' => $this->shipmentPayload($order),
             'timeline' => $this->timeline($order),
-            'can_create_payment_attempt' => ! $hasPendingPayment && ! $hasSuccessPayment && $order->order_status !== 'dibatalkan',
+            'can_create_payment_attempt' => ! $hasPendingPayment && ! $hasSuccessPayment,
             'can_open_payment' => $latestPayment?->status === 'pending'
                 && $latestPayment->snap_token
                 && (! $latestPayment->expired_at || $latestPayment->expired_at->isFuture()),
@@ -156,15 +144,7 @@ class CustomerOrderController extends Controller
 
     private function timeline(Order $order): array
     {
-        if ($order->order_status === 'dibatalkan') {
-            return [
-                $this->timelineItem('Pesanan dibuat', 'Order diterima sistem.', 'completed'),
-                $this->timelineItem('Pesanan dibatalkan', 'Pesanan tidak dilanjutkan.', 'current'),
-            ];
-        }
-
         $paymentStepStatus = match (true) {
-            $order->order_status === 'perlu_review_admin' => 'current',
             in_array($order->payment_status, ['success'], true) => 'completed',
             in_array($order->payment_status, ['failed', 'expired', 'cancelled'], true) => 'blocked',
             default => 'current',
@@ -173,13 +153,11 @@ class CustomerOrderController extends Controller
         $items = [
             $this->timelineItem('Pesanan dibuat', 'Order diterima sistem.', 'completed'),
             $this->timelineItem(
-                $order->order_status === 'perlu_review_admin' ? 'Perlu review admin' : 'Pembayaran berhasil',
-                $order->order_status === 'perlu_review_admin'
-                    ? 'Pembayaran diterima, stok atau order sedang dicek admin.'
-                    : ($order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran.'),
+                'Pembayaran berhasil',
+                $order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran.',
                 $paymentStepStatus
             ),
-            $this->timelineItem('Pesanan diproses', 'Tim toko menyiapkan sofa.', in_array($order->order_status, ['diproses', 'dikirim', 'selesai'], true) ? 'completed' : 'pending'),
+            $this->timelineItem('Pesanan diproses', 'Tim toko menyiapkan sofa.', in_array($order->order_status, ['diproses', 'dalam_perjalanan', 'barang_diterima'], true) ? 'completed' : 'pending'),
         ];
 
         return [
@@ -190,108 +168,64 @@ class CustomerOrderController extends Controller
 
     private function shipmentTimeline(Order $order): array
     {
-        $status = $order->shipment?->status ?? 'belum_dijadwalkan';
-
         if (! in_array($order->payment_status, ['success'], true)) {
             return [
-                $this->timelineItem('Pengiriman belum dijadwalkan', 'Pengiriman akan dijadwalkan setelah pembayaran berhasil.', 'pending'),
-                $this->timelineItem('Pengiriman dijadwalkan', 'Jadwal pengiriman akan tampil setelah admin menentukan waktu kirim.', 'pending'),
-                $this->timelineItem('Dalam pengiriman', 'Pesanan belum dibawa oleh petugas pengiriman.', 'pending'),
-                $this->timelineItem('Terkirim', 'Pesanan belum diterima pelanggan.', 'pending'),
-                $this->timelineItem('Gagal dikirim', 'Tidak ada kendala pengiriman saat ini.', 'pending'),
+                $this->timelineItem('Dalam perjalanan', 'Pesanan akan masuk perjalanan setelah pembayaran berhasil.', 'pending'),
+                $this->timelineItem('Barang diterima', 'Pesanan belum diterima pelanggan.', 'pending'),
             ];
         }
 
-        $rank = [
-            'belum_dijadwalkan' => 0,
-            'dijadwalkan' => 1,
-            'dalam_pengiriman' => 2,
-            'terkirim' => 3,
-        ];
-        $currentRank = $rank[$status] ?? 0;
+        $status = $order->order_status;
 
         return [
             $this->timelineItem(
-                'Pengiriman belum dijadwalkan',
-                'Admin belum menentukan jadwal pengiriman.',
-                $status === 'belum_dijadwalkan' ? 'current' : 'completed'
+                'Dalam perjalanan',
+                $order->driver_name
+                    ? 'Petugas: '.$order->driver_name.($order->driver_phone ? ' ('.$order->driver_phone.')' : '').'.'
+                    : 'Pesanan sedang dalam perjalanan.',
+                $status === 'barang_diterima' ? 'completed' : ($status === 'dalam_perjalanan' ? 'current' : 'pending')
             ),
             $this->timelineItem(
-                'Pengiriman dijadwalkan',
-                $order->shipment?->scheduled_at
-                    ? 'Jadwal pengiriman: '.$order->shipment->scheduled_at->translatedFormat('d F Y H.i').'.'
-                    : 'Jadwal pengiriman akan tampil setelah admin menentukan waktu kirim.',
-                $this->shipmentStepState($status, 'dijadwalkan', $currentRank, $rank)
-            ),
-            $this->timelineItem(
-                'Dalam pengiriman',
-                $order->shipment?->driver_name
-                    ? 'Petugas: '.$order->shipment->driver_name.($order->shipment->driver_phone ? ' ('.$order->shipment->driver_phone.')' : '').'.'
-                    : 'Pesanan sedang dibawa oleh petugas pengiriman.',
-                $this->shipmentStepState($status, 'dalam_pengiriman', $currentRank, $rank)
-            ),
-            $this->timelineItem(
-                'Terkirim',
-                $order->shipment?->delivered_at
-                    ? 'Pesanan diterima pada '.$order->shipment->delivered_at->translatedFormat('d F Y H.i').'.'
+                'Barang diterima',
+                $order->delivery_delivered_at
+                    ? 'Pesanan diterima pada '.$order->delivery_delivered_at->translatedFormat('d F Y').'.'
                     : 'Pesanan sudah diterima pelanggan.',
-                $this->shipmentStepState($status, 'terkirim', $currentRank, $rank)
-            ),
-            $this->timelineItem(
-                'Gagal dikirim',
-                'Pengiriman belum berhasil. Tim toko akan menghubungi atau menjadwalkan ulang.',
-                $status === 'gagal_dikirim' ? 'blocked' : 'pending'
+                $status === 'barang_diterima' ? 'completed' : 'pending'
             ),
         ];
-    }
-
-    private function shipmentStepState(string $currentStatus, string $stepStatus, int $currentRank, array $rank): string
-    {
-        if ($currentStatus === 'gagal_dikirim') {
-            return 'pending';
-        }
-
-        if ($currentStatus === $stepStatus) {
-            return $stepStatus === 'terkirim' ? 'completed' : 'current';
-        }
-
-        return $currentRank > ($rank[$stepStatus] ?? 0) ? 'completed' : 'pending';
-    }
-
-    private function shipmentLabel(string $status): string
-    {
-        return [
-            'belum_dijadwalkan' => 'Belum dijadwalkan',
-            'dijadwalkan' => 'Dijadwalkan',
-            'dalam_pengiriman' => 'Dalam pengiriman',
-            'terkirim' => 'Terkirim',
-            'gagal_dikirim' => 'Gagal dikirim',
-        ][$status] ?? str_replace('_', ' ', $status);
     }
 
     private function shipmentSummary(Order $order): string
     {
-        $shipment = $order->shipment;
-        $status = $shipment?->status ?? 'belum_dijadwalkan';
-
-        return match ($status) {
-            'belum_dijadwalkan' => 'Pengiriman belum dijadwalkan.',
-            'dijadwalkan' => $shipment?->scheduled_at
-                ? 'Dijadwalkan '.$shipment->scheduled_at->translatedFormat('d F Y H.i').'.'
-                : 'Pengiriman sudah dijadwalkan.',
-            'dalam_pengiriman' => $shipment?->driver_name
-                ? 'Sedang dikirim oleh '.$shipment->driver_name.'.'
-                : 'Pesanan sedang dalam pengiriman.',
-            'terkirim' => $shipment?->delivered_at
-                ? 'Terkirim '.$shipment->delivered_at->translatedFormat('d F Y H.i').'.'
-                : 'Pesanan sudah terkirim.',
-            'gagal_dikirim' => 'Pengiriman belum berhasil dan perlu ditindaklanjuti.',
-            default => $this->shipmentLabel($status),
+        return match ($order->order_status) {
+            'dalam_perjalanan' => $order->driver_name
+                ? 'Dalam perjalanan bersama '.$order->driver_name.'.'
+                : 'Pesanan sedang dalam perjalanan.',
+            'barang_diterima' => $order->delivery_delivered_at
+                ? 'Barang diterima '.$order->delivery_delivered_at->translatedFormat('d F Y').'.'
+                : 'Barang sudah diterima.',
+            default => 'Pesanan sedang diproses.',
         };
     }
 
     private function timelineItem(string $label, string $description, string $state): array
     {
         return compact('label', 'description', 'state');
+    }
+
+    private function shipmentPayload(Order $order): ?array
+    {
+        if (! $order->delivery_scheduled_at && ! $order->driver_name) {
+            return null;
+        }
+
+        return [
+            'scheduled_at' => $order->delivery_scheduled_at?->toIso8601String(),
+            'delivered_at' => $order->delivery_delivered_at?->toIso8601String(),
+            'driver_name' => $order->driver_name,
+            'driver_phone' => $order->driver_phone,
+            'vehicle_note' => $order->vehicle_note,
+            'shipping_note' => $order->delivery_note,
+        ];
     }
 }

@@ -3,13 +3,14 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use App\Support\Authorization\RolePermission;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
@@ -26,12 +27,6 @@ class User extends Authenticatable
         'email',
         'phone',
         'role',
-        'shipping_address',
-        'shipping_city',
-        'shipping_district',
-        'shipping_postal_code',
-        'shipping_latitude',
-        'shipping_longitude',
         'password',
     ];
 
@@ -55,8 +50,6 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'shipping_latitude' => 'float',
-            'shipping_longitude' => 'float',
         ];
     }
 
@@ -70,14 +63,14 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 
-    public function voucherUsages(): HasMany
+    public function addresses(): HasMany
     {
-        return $this->hasMany(VoucherUsage::class);
+        return $this->hasMany(UserAddress::class);
     }
 
-    public function notifications(): HasMany
+    public function defaultAddress(): HasOne
     {
-        return $this->hasMany(Notification::class);
+        return $this->hasOne(UserAddress::class)->where('is_default', true)->latestOfMany();
     }
 
     public function hasRole(string ...$roles): bool

@@ -7,9 +7,9 @@ const props = defineProps({
 });
 
 const tone = computed(() => {
-    if (['success', 'dibayar', 'selesai', 'terkirim', 'sent', 'aktif'].includes(props.status)) return 'success';
-    if (['failed', 'dibatalkan', 'gagal_dikirim', 'failed', 'nonaktif'].includes(props.status)) return 'danger';
-    if (['pending', 'menunggu_pembayaran', 'belum_dijadwalkan'].includes(props.status)) return 'warning';
+    if (['success', 'barang_diterima', 'sent', 'aktif'].includes(props.status)) return 'success';
+    if (['failed', 'nonaktif'].includes(props.status)) return 'danger';
+    if (['pending', 'menunggu_pembayaran', 'perlu_konfigurasi'].includes(props.status)) return 'warning';
     if (['expired', 'kedaluwarsa', 'kuota_habis', 'cancelled'].includes(props.status)) return 'neutral';
     return 'info';
 });
@@ -24,7 +24,7 @@ const classes = computed(() => ({
 </script>
 
 <template>
-    <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold" :class="classes">
+    <span class="inline-flex w-fit shrink-0 justify-self-start whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-semibold" :class="classes">
         {{ label || status.replaceAll('_', ' ') }}
     </span>
 </template>

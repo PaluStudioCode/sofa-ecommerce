@@ -14,6 +14,7 @@ import {
     MapPinned,
     Menu,
     PackageCheck,
+    Settings,
     ShoppingBag,
     Sofa,
     Tags,
@@ -54,21 +55,11 @@ const menuGroups = computed(() => groups.value
     }))
     .filter((group) => group.items.length > 0)
 );
-const menuEntries = computed(() => menuGroups.value.map((group) => {
-    if (group.items.length === 1) {
-        return {
-            type: 'item',
-            key: group.label,
-            item: group.items[0],
-        };
-    }
-
-    return {
-        type: 'group',
-        key: group.label,
-        group,
-    };
-}));
+const menuEntries = computed(() => menuGroups.value.map((group) => ({
+    type: 'group',
+    key: group.label,
+    group,
+})));
 
 const iconMap = {
     Boxes,
@@ -81,6 +72,7 @@ const iconMap = {
     MapPinned,
     Menu,
     PackageCheck,
+    Settings,
     ShoppingBag,
     Sofa,
     Tags,
@@ -134,7 +126,7 @@ function toggleGroup(group, index) {
     <div class="min-h-screen bg-neutral-light text-neutral-text">
         <aside class="fixed inset-y-0 left-0 z-50 flex h-screen w-72 transform flex-col border-r border-neutral-border bg-white transition lg:translate-x-0" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
             <div class="flex h-16 items-center justify-between border-b border-neutral-border px-4">
-                <Link href="/dashboard" class="font-bold">SofaStore</Link>
+                <Link href="/dashboard" class="truncate font-bold">{{ page.props.storeContact?.name || 'SofaStore' }}</Link>
                 <button type="button" class="grid h-9 w-9 place-items-center rounded-md hover:bg-neutral-light lg:hidden" @click="sidebarOpen = false">
                     <X class="h-5 w-5" />
                     <span class="sr-only">Tutup</span>

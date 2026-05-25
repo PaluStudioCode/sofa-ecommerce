@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\VoucherFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -22,20 +23,20 @@ class Voucher extends Model
             'max_discount' => 'decimal:2',
             'minimum_purchase' => 'decimal:2',
             'quota' => 'integer',
-            'used_count' => 'integer',
             'per_user_limit' => 'integer',
             'start_at' => 'datetime',
             'end_at' => 'datetime',
         ];
     }
 
-    public function orders(): HasMany
+    public function voucherSnapshots(): HasMany
     {
-        return $this->hasMany(Order::class);
+        return $this->hasMany(OrderVoucherSnapshot::class);
     }
 
-    public function usages(): HasMany
+    public function orders(): BelongsToMany
     {
-        return $this->hasMany(VoucherUsage::class);
+        return $this->belongsToMany(Order::class, 'order_voucher_snapshots')
+            ->withTimestamps();
     }
 }

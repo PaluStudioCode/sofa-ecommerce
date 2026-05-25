@@ -6,8 +6,9 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
-use App\Models\Store;
+use App\Models\ShippingSetting;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Models\Voucher;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -29,18 +30,24 @@ class DatabaseSeeder extends Seeder
             'email_verified_at' => now(),
         ]);
 
-        User::updateOrCreate(['email' => 'user@sofa.com'], [
+        $customer = User::updateOrCreate(['email' => 'user@sofa.com'], [
             'name' => 'User Sofa',
             'phone' => '081245000002',
             'role' => 'customer',
-            'shipping_address' => 'Jl. Moh. Yamin, Palu, Sulawesi Tengah',
-            'shipping_city' => 'Palu',
-            'shipping_district' => 'Palu Selatan',
-            'shipping_postal_code' => '94111',
-            'shipping_latitude' => -0.90030000,
-            'shipping_longitude' => 119.87800000,
             'password' => $password,
             'email_verified_at' => now(),
+        ]);
+
+        UserAddress::updateOrCreate(['user_id' => $customer->id, 'is_default' => true], [
+            'recipient_name' => 'User Sofa',
+            'phone' => '081245000002',
+            'detail' => 'Rumah pagar putih, dekat minimarket.',
+            'formatted_address' => 'Jl. Moh. Yamin, Palu, Sulawesi Tengah',
+            'city' => 'Palu',
+            'district' => 'Palu Selatan',
+            'postal_code' => '94111',
+            'latitude' => -0.90030000,
+            'longitude' => 119.87800000,
         ]);
 
         $livingRoom = Category::updateOrCreate(['slug' => 'sofa-ruang-tamu'], [
@@ -127,7 +134,7 @@ class DatabaseSeeder extends Seeder
             'status' => 'aktif',
         ]);
 
-        ProductVariant::updateOrCreate(['sku' => 'LUNA-3S-VELVET-NAVY'], [
+        $lunaNavy = ProductVariant::updateOrCreate(['sku' => 'LUNA-3S-VELVET-NAVY'], [
             'product_id' => $luna->id,
             'variant_name' => 'Velvet Navy 3 Seater',
             'size' => '3 Seater',
@@ -163,7 +170,7 @@ class DatabaseSeeder extends Seeder
             'status' => 'aktif',
         ]);
 
-        ProductVariant::updateOrCreate(['sku' => 'NARA-2S-LINEN-SAGE'], [
+        $naraSage = ProductVariant::updateOrCreate(['sku' => 'NARA-2S-LINEN-SAGE'], [
             'product_id' => $nara->id,
             'variant_name' => 'Linen Sage 2 Seater',
             'size' => '2 Seater',
@@ -211,58 +218,52 @@ class DatabaseSeeder extends Seeder
             'status' => 'aktif',
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $lunaGrey->id,
-            'file_path' => 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Luna 3 Seater',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($lunaGrey, [
+            ['url' => 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Luna linen abu-abu tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1540932239986-30128078f3c5?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Luna linen abu-abu di ruang tamu'],
+            ['url' => 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Detail dudukan Sofa Luna linen abu-abu'],
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $auroraSand->id,
-            'file_path' => 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Aurora Corner',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($lunaNavy, [
+            ['url' => 'https://images.unsplash.com/photo-1550581190-9c1c48d21d6c?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Luna velvet navy tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1567016376408-0226e4d0c1ea?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Luna velvet navy tampak samping'],
+            ['url' => 'https://images.unsplash.com/photo-1512212621149-107ffe572d2f?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Luna velvet navy dalam ruang keluarga'],
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $naraIvory->id,
-            'file_path' => 'https://images.unsplash.com/photo-1540574163026-643ea20ade25?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Nara 2 Seater',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($auroraSand, [
+            ['url' => 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Aurora corner sand tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Aurora corner sand pada ruang keluarga'],
+            ['url' => 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Aurora corner sand tampak sudut'],
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $terraCharcoal->id,
-            'file_path' => 'https://images.unsplash.com/photo-1550581190-9c1c48d21d6c?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Terra Bed',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($naraIvory, [
+            ['url' => 'https://images.unsplash.com/photo-1540574163026-643ea20ade25?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Nara boucle ivory tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Nara boucle ivory dalam ruangan'],
+            ['url' => 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Detail Sofa Nara boucle ivory'],
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $osloBrown->id,
-            'file_path' => 'https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Oslo Recliner',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($naraSage, [
+            ['url' => 'https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Nara linen sage tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1618220252344-8ec99ec624b1?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Nara linen sage tampak samping'],
+            ['url' => 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Nara linen sage di ruang santai'],
         ]);
 
-        ProductImage::updateOrCreate([
-            'product_variant_id' => $mikaEmerald->id,
-            'file_path' => 'https://images.unsplash.com/photo-1567016432779-094069958ea5?auto=format&fit=crop&w=1200&q=80',
-        ], [
-            'alt_text' => 'Sofa Mika Loveseat',
-            'sort_order' => 0,
-            'is_primary' => true,
+        $this->seedVariantImages($terraCharcoal, [
+            ['url' => 'https://images.unsplash.com/photo-1550581190-9c1c48d21d6c?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Terra bed charcoal mode sofa'],
+            ['url' => 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Terra bed charcoal dalam ruang tamu'],
+            ['url' => 'https://images.unsplash.com/photo-1618221118493-9cfa1a1c00da?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Detail Sofa Terra bed charcoal'],
+        ]);
+
+        $this->seedVariantImages($osloBrown, [
+            ['url' => 'https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Oslo recliner cokelat tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1616627561839-074385245ff6?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Oslo recliner cokelat dalam ruang santai'],
+            ['url' => 'https://images.unsplash.com/photo-1615873968403-89e068629265?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Detail Sofa Oslo recliner cokelat'],
+        ]);
+
+        $this->seedVariantImages($mikaEmerald, [
+            ['url' => 'https://images.unsplash.com/photo-1567016432779-094069958ea5?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Mika velvet emerald tampak depan'],
+            ['url' => 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Sofa Mika velvet emerald di ruang tamu'],
+            ['url' => 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80', 'alt' => 'Detail Sofa Mika velvet emerald'],
         ]);
 
         Voucher::updateOrCreate(['code' => 'SOFAHEMAT'], [
@@ -273,7 +274,6 @@ class DatabaseSeeder extends Seeder
             'max_discount' => null,
             'minimum_purchase' => 3000000,
             'quota' => 100,
-            'used_count' => 0,
             'per_user_limit' => 1,
             'start_at' => now()->subDay(),
             'end_at' => now()->addMonth(),
@@ -288,21 +288,33 @@ class DatabaseSeeder extends Seeder
             'max_discount' => 300000,
             'minimum_purchase' => 2500000,
             'quota' => 50,
-            'used_count' => 0,
             'per_user_limit' => 1,
             'start_at' => now()->subDay(),
             'end_at' => now()->addMonth(),
             'status' => 'aktif',
         ]);
 
-        Store::updateOrCreate(['name' => 'Toko Sofa Palu'], [
-            'description' => 'Titik toko dan pusat pengiriman SofaStore di Palu, Sulawesi Tengah.',
-            'latitude' => -0.90030000,
-            'longitude' => 119.87800000,
+        ShippingSetting::updateOrCreate(['origin_name' => 'Toko Sofa Palu'], [
+            'origin_address' => 'Titik toko dan pusat pengiriman SofaStore di Palu, Sulawesi Tengah.',
+            'origin_latitude' => -0.90030000,
+            'origin_longitude' => 119.87800000,
             'radius_km' => 25,
-            'shipping_cost' => 12000,
-            'priority' => 0,
+            'shipping_cost_per_km' => 12000,
             'is_active' => true,
         ]);
+    }
+
+    private function seedVariantImages(ProductVariant $variant, array $images): void
+    {
+        foreach ($images as $index => $image) {
+            ProductImage::updateOrCreate([
+                'product_variant_id' => $variant->id,
+                'file_path' => $image['url'],
+            ], [
+                'alt_text' => $image['alt'],
+                'sort_order' => $index,
+                'is_primary' => $index === 0,
+            ]);
+        }
     }
 }

@@ -39,7 +39,7 @@ class VoucherRequest extends FormRequest
                 $validator->errors()->add('discount_value', 'Diskon persentase tidak boleh lebih dari 100%.');
             }
 
-            $usedCount = (int) ($this->route('voucher')?->used_count ?? 0);
+            $usedCount = (int) ($this->route('voucher')?->orders()->count() ?? 0);
             $quota = $this->input('quota');
 
             if ($quota !== null && $quota !== '' && (int) $quota < $usedCount) {

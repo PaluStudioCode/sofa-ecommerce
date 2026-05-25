@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\ProductVariant;
-use App\Models\Store;
+use App\Models\ShippingSetting;
 use App\Models\User;
+use App\Models\UserAddress;
 use App\Models\Voucher;
-use App\Models\VoucherUsage;
 use App\Services\Notifications\WhatsAppNotificationService;
 use App\Services\Payments\PaymentAttemptService;
 use App\Services\Vouchers\VoucherStatusService;
@@ -92,6 +92,12 @@ class CheckoutController extends Controller
             ]);
         }
 
+        if (! $this->hasCompleteShippingContact($location)) {
+            throw ValidationException::withMessages([
+                'location' => 'Lengkapi nama penerima, nomor telepon, dan detail alamat pengiriman.',
+            ]);
+        }
+
         $voucherCode = Str::upper(trim((string) ($data['voucher_code'] ?? '')));
         $this->quote($items, $request->user()->id, $location, $voucherCode, true);
         $request->session()->put('checkout.voucher_code', $voucherCode);
@@ -102,8 +108,6 @@ class CheckoutController extends Controller
     public function store(Request $request, PaymentAttemptService $payments, WhatsAppNotificationService $notifications): RedirectResponse
     {
         $data = $request->validate([
-            'customer_phone' => ['required', 'string', 'max:30'],
-            'shipping_note' => ['nullable', 'string', 'max:1000'],
             'voucher_code' => ['nullable', 'string', 'max:100'],
         ]);
 
@@ -133,40 +137,68 @@ class CheckoutController extends Controller
                 ->lockForUpdate()
                 ->get();
 
-            $cartItems->load(['product.category', 'variant']);
+            $cartItems->load(['variant.product.category']);
 
             $voucherCode = Str::upper(trim((string) ($data['voucher_code'] ?? $request->session()->get('checkout.voucher_code', ''))));
             $quote = $this->quote($cartItems, $request->user()->id, $location, $voucherCode, true, true);
+            $address = $this->ensureUserAddress($request->user(), $location);
 
             $order = Order::create([
                 'order_number' => $this->nextOrderNumber(),
                 'user_id' => $request->user()->id,
-                'voucher_id' => $quote['voucher']['id'] ?? null,
-                'store_id' => $quote['store']['id'],
-                'customer_name' => $request->user()->name,
-                'customer_phone' => $data['customer_phone'],
-                'shipping_address' => $location['formatted_address'],
-                'shipping_city' => $location['city'],
-                'shipping_district' => $location['district'],
-                'shipping_postal_code' => $location['postal_code'],
-                'shipping_latitude' => $location['latitude'],
-                'shipping_longitude' => $location['longitude'],
-                'shipping_note' => $data['shipping_note'] ?? null,
+                'order_status' => 'menunggu_pembayaran',
+            ]);
+
+            $order->total()->create([
                 'subtotal_amount' => $quote['subtotal'],
                 'discount_amount' => $quote['discount_amount'],
                 'shipping_cost' => $quote['shipping_cost'],
                 'total_amount' => $quote['total'],
-                'order_status' => 'menunggu_pembayaran',
-                'payment_status' => 'pending',
+            ]);
+
+            $order->address()->create([
+                'user_address_id' => $address->id,
+                'recipient_name' => $address->recipient_name,
+                'phone' => $address->phone,
+                'detail' => $address->detail,
+                'formatted_address' => $address->formatted_address,
+                'city' => $address->city,
+                'district' => $address->district,
+                'postal_code' => $address->postal_code,
+                'latitude' => $address->latitude,
+                'longitude' => $address->longitude,
+            ]);
+
+            if ($quote['voucher']) {
+                $order->voucherSnapshot()->create([
+                    'voucher_id' => $quote['voucher']['id'],
+                    'voucher_code' => $quote['voucher']['code'],
+                    'voucher_name' => $quote['voucher']['name'],
+                    'discount_type' => $quote['voucher']['discount_type'],
+                    'discount_value' => $quote['voucher']['discount_value'],
+                    'max_discount' => $quote['voucher']['max_discount'],
+                    'minimum_purchase' => $quote['voucher']['minimum_purchase'],
+                ]);
+            }
+
+            $order->shippingSnapshot()->create([
+                'shipping_setting_id' => $quote['store']['id'],
+                'origin_name' => $quote['store']['name'],
+                'origin_address' => $quote['store']['origin_address'],
+                'origin_latitude' => $quote['store']['origin_latitude'],
+                'origin_longitude' => $quote['store']['origin_longitude'],
+                'shipping_cost_per_km' => $quote['store']['shipping_cost_per_km'],
+                'distance_km' => $quote['store']['distance_km'],
+                'billable_distance_km' => $quote['store']['billable_distance_km'],
+                'shipping_cost' => $quote['shipping_cost'],
             ]);
 
             foreach ($cartItems as $item) {
                 $variant = $item->variant;
 
                 $order->items()->create([
-                    'product_id' => $item->product_id,
                     'product_variant_id' => $item->product_variant_id,
-                    'product_name' => $item->product->name,
+                    'product_name' => $variant->product->name,
                     'variant_name' => $variant->variant_name,
                     'variant_sku' => $variant->sku,
                     'variant_size' => $variant->size,
@@ -180,19 +212,8 @@ class CheckoutController extends Controller
                 $variant->increment('reserved_stock', $item->quantity);
             }
 
-            if ($quote['voucher']) {
-                Voucher::whereKey($quote['voucher']['id'])->increment('used_count');
-                VoucherUsage::create([
-                    'voucher_id' => $quote['voucher']['id'],
-                    'user_id' => $request->user()->id,
-                    'order_id' => $order->id,
-                    'discount_amount' => $quote['discount_amount'],
-                    'used_at' => now(),
-                ]);
-            }
-
             CartItem::where('user_id', $request->user()->id)->delete();
-            $request->user()->forceFill(['phone' => $data['customer_phone']])->save();
+            $request->user()->forceFill(['phone' => $address->phone ?: $request->user()->phone])->save();
 
             return $order;
         });
@@ -210,8 +231,9 @@ class CheckoutController extends Controller
     {
         return CartItem::query()
             ->with([
-                'product.category:id,name',
                 'variant:id,product_id,sku,variant_name,size,material,color,price,stock,reserved_stock,status',
+                'variant.product:id,category_id,name,slug,status',
+                'variant.product.category:id,name',
                 'variant.images:id,product_variant_id,file_path,is_primary,sort_order',
             ])
             ->where('user_id', $request->user()->id)
@@ -223,9 +245,9 @@ class CheckoutController extends Controller
     {
         return [
             'id' => $item->id,
-            'product_name' => $item->product->name,
-            'product_slug' => $item->product->slug,
-            'category' => $item->product->category?->name,
+            'product_name' => $item->variant->product->name,
+            'product_slug' => $item->variant->product->slug,
+            'category' => $item->variant->product->category?->name,
             'image_url' => MediaUrl::fromPath($this->primaryImage($item->variant)?->file_path),
             'variant_name' => $item->variant->variant_name ?: $item->variant->sku,
             'specification' => collect([$item->variant->size, $item->variant->material, $item->variant->color])->filter()->join(' / '),
@@ -263,23 +285,32 @@ class CheckoutController extends Controller
             ]);
         }
 
+        if ($strict && ! $this->hasCompleteShippingContact($location)) {
+            throw ValidationException::withMessages([
+                'location' => 'Lengkapi nama penerima, nomor telepon, dan detail alamat pengiriman.',
+            ]);
+        }
+
         $voucher = $voucherCode !== ''
             ? $this->validVoucher($voucherCode, $subtotal, $userId, $lockVoucher)
             : null;
         $discount = $voucher ? $this->discountAmount($voucher, $subtotal) : 0.0;
         $shippingCost = $shippingRule ? $shippingRule['shipping_cost'] : 0.0;
-        $store = $shippingRule['store'] ?? null;
+        $shippingSetting = $shippingRule['shipping_setting'] ?? null;
 
         return [
             'subtotal' => $subtotal,
             'discount_amount' => min($discount, $subtotal),
             'shipping_cost' => $shippingCost,
             'total' => max(0, $subtotal - min($discount, $subtotal)) + $shippingCost,
-            'store' => $store ? [
-                'id' => $store->id,
-                'name' => $store->name,
-                'radius_km' => (float) $store->radius_km,
-                'shipping_cost_per_km' => (float) $store->shipping_cost,
+            'store' => $shippingSetting ? [
+                'id' => $shippingSetting->id,
+                'name' => $shippingSetting->origin_name,
+                'origin_address' => $shippingSetting->origin_address,
+                'origin_latitude' => (float) $shippingSetting->origin_latitude,
+                'origin_longitude' => (float) $shippingSetting->origin_longitude,
+                'radius_km' => (float) $shippingSetting->radius_km,
+                'shipping_cost_per_km' => (float) $shippingSetting->shipping_cost_per_km,
                 'distance_km' => $shippingRule['distance_km'],
                 'billable_distance_km' => $shippingRule['billable_distance_km'],
             ] : null,
@@ -289,45 +320,54 @@ class CheckoutController extends Controller
                 'name' => $voucher->name,
                 'discount_type' => $voucher->discount_type,
                 'discount_value' => (float) $voucher->discount_value,
+                'max_discount' => $voucher->max_discount !== null ? (float) $voucher->max_discount : null,
+                'minimum_purchase' => (float) $voucher->minimum_purchase,
             ] : null,
-            'can_submit' => $items->isNotEmpty() && $location !== null && $store !== null,
+            'can_submit' => $items->isNotEmpty() && $location !== null && $shippingSetting !== null && $this->hasCompleteShippingContact($location),
         ];
+    }
+
+    private function hasCompleteShippingContact(?array $location): bool
+    {
+        return filled($location['recipient_name'] ?? null)
+            && filled($location['phone'] ?? null)
+            && filled($location['detail'] ?? null);
     }
 
     private function assertCartItemValid(CartItem $item): void
     {
-        if ($item->product->status !== 'aktif') {
-            throw ValidationException::withMessages(['cart' => "{$item->product->name} sudah tidak aktif."]);
+        if ($item->variant->product->status !== 'aktif') {
+            throw ValidationException::withMessages(['cart' => "{$item->variant->product->name} sudah tidak aktif."]);
         }
 
         if ($item->variant->status !== 'aktif') {
-            throw ValidationException::withMessages(['cart' => "Varian {$item->product->name} sudah tidak aktif."]);
+            throw ValidationException::withMessages(['cart' => "Varian {$item->variant->product->name} sudah tidak aktif."]);
         }
 
         if ($item->quantity > $item->variant->availableStock()) {
-            throw ValidationException::withMessages(['cart' => "Stok {$item->product->name} tidak mencukupi."]);
+            throw ValidationException::withMessages(['cart' => "Stok {$item->variant->product->name} tidak mencukupi."]);
         }
     }
 
     private function matchingShippingRule(float $latitude, float $longitude): ?array
     {
-        $store = Store::query()
+        $shippingSetting = ShippingSetting::query()
             ->where('is_active', true)
             ->latest()
             ->first();
 
-        if (! $store) {
+        if (! $shippingSetting) {
             return null;
         }
 
         $distanceMeters = GeoDistance::haversineMeters(
-            (float) $store->latitude,
-            (float) $store->longitude,
+            (float) $shippingSetting->origin_latitude,
+            (float) $shippingSetting->origin_longitude,
             $latitude,
             $longitude
         );
 
-        if ($distanceMeters > ((float) $store->radius_km * 1000)) {
+        if ($distanceMeters > ((float) $shippingSetting->radius_km * 1000)) {
             return null;
         }
 
@@ -335,10 +375,10 @@ class CheckoutController extends Controller
         $billableDistanceKm = max(1, (int) round($distanceKm, 0, PHP_ROUND_HALF_UP));
 
         return [
-            'store' => $store,
+            'shipping_setting' => $shippingSetting,
             'distance_km' => round($distanceKm, 2),
             'billable_distance_km' => $billableDistanceKm,
-            'shipping_cost' => $billableDistanceKm * (float) $store->shipping_cost,
+            'shipping_cost' => $billableDistanceKm * (float) $shippingSetting->shipping_cost_per_km,
         ];
     }
 
@@ -364,7 +404,7 @@ class CheckoutController extends Controller
             throw ValidationException::withMessages(['voucher_code' => 'Voucher sudah berakhir atau belum aktif.']);
         }
 
-        if ($voucher->quota !== null && $voucher->used_count >= $voucher->quota) {
+        if ($voucher->quota !== null && $voucher->orders()->count() >= $voucher->quota) {
             throw ValidationException::withMessages(['voucher_code' => 'Kuota voucher sudah habis.']);
         }
 
@@ -373,7 +413,10 @@ class CheckoutController extends Controller
         }
 
         if ($voucher->per_user_limit !== null) {
-            $usedByUser = $voucher->usages()->where('user_id', $userId)->count();
+            $usedByUser = Order::query()
+                ->where('user_id', $userId)
+                ->whereHas('voucherSnapshot', fn ($query) => $query->where('voucher_id', $voucher->id))
+                ->count();
 
             if ($usedByUser >= $voucher->per_user_limit) {
                 throw ValidationException::withMessages(['voucher_code' => 'Batas penggunaan voucher untuk akun ini sudah tercapai.']);
@@ -399,6 +442,9 @@ class CheckoutController extends Controller
     private function locationFromRequest(array $data): array
     {
         return [
+            'recipient_name' => $data['recipient_name'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'detail' => $data['detail'] ?? null,
             'formatted_address' => trim((string) $data['formatted_address']),
             'city' => filled($data['city'] ?? null) ? trim((string) $data['city']) : null,
             'district' => filled($data['district'] ?? null) ? trim((string) $data['district']) : null,
@@ -410,18 +456,66 @@ class CheckoutController extends Controller
 
     private function userShippingLocation(User $user): ?array
     {
-        if (! $user->shipping_address || $user->shipping_latitude === null || $user->shipping_longitude === null) {
+        $address = $user->relationLoaded('defaultAddress')
+            ? $user->defaultAddress
+            : $user->defaultAddress()->first();
+
+        if (! $address || ! $address->formatted_address || $address->latitude === null || $address->longitude === null) {
             return null;
         }
 
         return [
-            'formatted_address' => $user->shipping_address,
-            'city' => $user->shipping_city,
-            'district' => $user->shipping_district,
-            'postal_code' => $user->shipping_postal_code,
-            'latitude' => (float) $user->shipping_latitude,
-            'longitude' => (float) $user->shipping_longitude,
+            'user_address_id' => $address->id,
+            'recipient_name' => $address->recipient_name ?: $user->name,
+            'phone' => $address->phone ?: $user->phone,
+            'detail' => $address->detail,
+            'formatted_address' => $address->formatted_address,
+            'city' => $address->city,
+            'district' => $address->district,
+            'postal_code' => $address->postal_code,
+            'latitude' => (float) $address->latitude,
+            'longitude' => (float) $address->longitude,
         ];
+    }
+
+    private function ensureUserAddress(User $user, array $location): UserAddress
+    {
+        $addressId = $location['user_address_id'] ?? $location['id'] ?? null;
+
+        if ($addressId) {
+            $address = $user->addresses()->whereKey($addressId)->first();
+
+            if ($address) {
+                return $address;
+            }
+        }
+
+        $payload = [
+            'recipient_name' => trim((string) ($location['recipient_name'] ?: $user->name)),
+            'phone' => trim((string) ($location['phone'] ?: $user->phone)),
+            'detail' => trim((string) $location['detail']),
+            'formatted_address' => trim((string) $location['formatted_address']),
+            'city' => filled($location['city'] ?? null) ? trim((string) $location['city']) : null,
+            'district' => filled($location['district'] ?? null) ? trim((string) $location['district']) : null,
+            'postal_code' => filled($location['postal_code'] ?? null) ? trim((string) $location['postal_code']) : null,
+            'latitude' => (float) $location['latitude'],
+            'longitude' => (float) $location['longitude'],
+            'is_default' => true,
+        ];
+
+        $address = $user->defaultAddress()->first();
+
+        if ($address && ! $address->orders()->exists()) {
+            $address->update($payload);
+        } else {
+            $address = $user->addresses()->create($payload);
+        }
+
+        $user->addresses()
+            ->whereKeyNot($address->id)
+            ->update(['is_default' => false]);
+
+        return $address->fresh();
     }
 
     private function nextOrderNumber(): string

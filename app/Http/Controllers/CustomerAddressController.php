@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\UserAddress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,14 +13,19 @@ class CustomerAddressController extends Controller
 {
     public function edit(Request $request): Response
     {
+        $user = $request->user()->load('defaultAddress');
+
         return Inertia::render('Address/Edit', [
-            'address' => $this->addressPayload($request->user()),
+            'address' => $this->addressPayload($user->defaultAddress, $user),
         ]);
     }
 
     public function update(Request $request): RedirectResponse
     {
         $data = $request->validate([
+            'recipient_name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:30'],
+            'detail' => ['required', 'string', 'max:1000'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'formatted_address' => ['required', 'string', 'max:2000'],
@@ -28,36 +34,57 @@ class CustomerAddressController extends Controller
             'postal_code' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $location = [
-            'shipping_address' => trim((string) $data['formatted_address']),
-            'shipping_city' => filled($data['city'] ?? null) ? trim((string) $data['city']) : null,
-            'shipping_district' => filled($data['district'] ?? null) ? trim((string) $data['district']) : null,
-            'shipping_postal_code' => filled($data['postal_code'] ?? null) ? trim((string) $data['postal_code']) : null,
-            'shipping_latitude' => (float) $data['latitude'],
-            'shipping_longitude' => (float) $data['longitude'],
+        $payload = [
+            'recipient_name' => trim((string) $data['recipient_name']),
+            'phone' => trim((string) $data['phone']),
+            'detail' => trim((string) $data['detail']),
+            'formatted_address' => trim((string) $data['formatted_address']),
+            'city' => filled($data['city'] ?? null) ? trim((string) $data['city']) : null,
+            'district' => filled($data['district'] ?? null) ? trim((string) $data['district']) : null,
+            'postal_code' => filled($data['postal_code'] ?? null) ? trim((string) $data['postal_code']) : null,
+            'latitude' => (float) $data['latitude'],
+            'longitude' => (float) $data['longitude'],
+            'is_default' => true,
         ];
 
-        $request->user()->update($location);
-        $request->session()->put('checkout.location', $this->addressPayload($request->user()->fresh()));
+        $user = $request->user();
+        $address = $user->defaultAddress()->first();
+
+        if ($address && ! $address->orders()->exists()) {
+            $address->update($payload);
+        } else {
+            $address = $user->addresses()->create($payload);
+        }
+
+        $user->addresses()
+            ->whereKeyNot($address->id)
+            ->update(['is_default' => false]);
+
+        $user->forceFill(['phone' => $payload['phone']])->save();
+        $request->session()->put('checkout.location', $this->addressPayload($address->fresh(), $user->fresh()));
 
         return redirect()
             ->route('address.edit')
             ->with('success', 'Alamat pengiriman diperbarui.');
     }
 
-    private function addressPayload(?User $user): ?array
+    private function addressPayload(?UserAddress $address, ?User $user): ?array
     {
-        if (! $user?->shipping_address || $user->shipping_latitude === null || $user->shipping_longitude === null) {
+        if (! $user) {
             return null;
         }
 
         return [
-            'formatted_address' => $user->shipping_address,
-            'city' => $user->shipping_city,
-            'district' => $user->shipping_district,
-            'postal_code' => $user->shipping_postal_code,
-            'latitude' => (float) $user->shipping_latitude,
-            'longitude' => (float) $user->shipping_longitude,
+            'id' => $address?->id,
+            'recipient_name' => $address?->recipient_name ?: $user->name,
+            'phone' => $address?->phone ?: $user->phone,
+            'detail' => $address?->detail,
+            'formatted_address' => $address?->formatted_address,
+            'city' => $address?->city,
+            'district' => $address?->district,
+            'postal_code' => $address?->postal_code,
+            'latitude' => $address?->latitude === null ? null : (float) $address->latitude,
+            'longitude' => $address?->longitude === null ? null : (float) $address->longitude,
         ];
     }
 }

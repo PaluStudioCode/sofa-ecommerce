@@ -16,9 +16,13 @@ class VoucherStatusService
 
         Voucher::query()
             ->whereNotNull('quota')
-            ->whereColumn('used_count', '>=', 'quota')
             ->where('status', '!=', 'kuota_habis')
-            ->update(['status' => 'kuota_habis']);
+            ->get()
+            ->each(function (Voucher $voucher) {
+                if ($this->usedCount($voucher) >= (int) $voucher->quota) {
+                    $voucher->forceFill(['status' => 'kuota_habis'])->save();
+                }
+            });
     }
 
     public function normalize(array $data, int $usedCount = 0): array
@@ -40,7 +44,7 @@ class VoucherStatusService
 
         if ($voucher->end_at->isPast()) {
             $status = 'kedaluwarsa';
-        } elseif ($voucher->quota !== null && $voucher->used_count >= $voucher->quota) {
+        } elseif ($voucher->quota !== null && $this->usedCount($voucher) >= $voucher->quota) {
             $status = 'kuota_habis';
         }
 
@@ -50,5 +54,10 @@ class VoucherStatusService
         }
 
         return $voucher;
+    }
+
+    private function usedCount(Voucher $voucher): int
+    {
+        return (int) ($voucher->orders_count ?? $voucher->orders()->count());
     }
 }

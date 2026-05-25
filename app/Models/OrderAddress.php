@@ -2,28 +2,28 @@
 
 namespace App\Models;
 
-use Database\Factories\ShipmentFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Shipment extends Model
+class OrderAddress extends Model
 {
-    /** @use HasFactory<ShipmentFactory> */
-    use HasFactory;
-
     protected $guarded = [];
 
     protected function casts(): array
     {
         return [
-            'scheduled_at' => 'datetime',
-            'delivered_at' => 'datetime',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
         ];
     }
 
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function userAddress(): BelongsTo
+    {
+        return $this->belongsTo(UserAddress::class);
     }
 }

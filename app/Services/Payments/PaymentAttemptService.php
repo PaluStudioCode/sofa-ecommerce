@@ -16,15 +16,14 @@ class PaymentAttemptService
     public function __construct(
         private readonly MidtransPaymentGateway $gateway,
         private readonly WhatsAppNotificationService $notifications,
-    ) {
-    }
+    ) {}
 
     public function createAttempt(Order $order): Payment
     {
         return DB::transaction(function () use ($order) {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()
-                ->with(['items.variant', 'payments'])
+                ->with(['items.variant', 'payments', 'total', 'address', 'user:id,name,email,phone'])
                 ->lockForUpdate()
                 ->findOrFail($order->id);
 
@@ -52,7 +51,6 @@ class PaymentAttemptService
             ]);
 
             $lockedOrder->update([
-                'payment_status' => 'pending',
                 'order_status' => 'menunggu_pembayaran',
             ]);
 
@@ -152,8 +150,6 @@ class PaymentAttemptService
             }
 
             if ($mappedStatus === 'pending') {
-                $order->update(['payment_status' => 'pending']);
-
                 return $lockedPayment->fresh();
             }
 
@@ -166,7 +162,6 @@ class PaymentAttemptService
 
             if ($previousStatus === 'pending' && in_array($mappedStatus, ['expired', 'failed', 'cancelled'], true)) {
                 $this->releaseReservedStock($order);
-                $order->update(['payment_status' => $mappedStatus]);
             }
 
             return $lockedPayment->fresh();
@@ -175,10 +170,6 @@ class PaymentAttemptService
 
     private function assertCanCreateAttempt(Order $order): void
     {
-        if ($order->order_status === 'dibatalkan') {
-            throw ValidationException::withMessages(['order' => 'Pesanan sudah dibatalkan.']);
-        }
-
         if ($order->payment_status === 'success' || $order->payments->contains('status', 'success')) {
             throw ValidationException::withMessages(['order' => 'Pesanan sudah dibayar.']);
         }
@@ -247,8 +238,7 @@ class PaymentAttemptService
 
         if (! $canSettle) {
             $order->update([
-                'payment_status' => 'success',
-                'order_status' => 'perlu_review_admin',
+                'order_status' => 'diproses',
             ]);
 
             return;
@@ -268,22 +258,23 @@ class PaymentAttemptService
         }
 
         $order->update([
-            'payment_status' => 'success',
-            'order_status' => 'dibayar',
+            'order_status' => 'diproses',
         ]);
     }
 
     private function snapPayload(Order $order, string $midtransOrderId): array
     {
+        $address = $order->address;
+
         return [
             'transaction_details' => [
                 'order_id' => $midtransOrderId,
                 'gross_amount' => (int) round((float) $order->total_amount),
             ],
             'customer_details' => [
-                'first_name' => $order->customer_name,
+                'first_name' => $address?->recipient_name ?: $order->user?->name,
                 'email' => $order->user?->email,
-                'phone' => $order->customer_phone,
+                'phone' => $address?->phone ?: $order->user?->phone,
             ],
             'item_details' => $this->itemDetails($order),
             'callbacks' => [
@@ -294,6 +285,8 @@ class PaymentAttemptService
 
     private function itemDetails(Order $order): array
     {
+        $total = $order->total;
+
         $items = $order->items->map(fn ($item) => [
             'id' => $item->variant_sku ?: 'ITEM-'.$item->id,
             'price' => (int) round((float) $item->product_price),
@@ -301,19 +294,19 @@ class PaymentAttemptService
             'name' => Str::limit(trim($item->product_name.' '.$item->variant_name), 50, ''),
         ])->values()->all();
 
-        if ((float) $order->discount_amount > 0) {
+        if ((float) $total?->discount_amount > 0) {
             $items[] = [
                 'id' => 'DISCOUNT',
-                'price' => -1 * (int) round((float) $order->discount_amount),
+                'price' => -1 * (int) round((float) $total->discount_amount),
                 'quantity' => 1,
                 'name' => 'Diskon voucher',
             ];
         }
 
-        if ((float) $order->shipping_cost > 0) {
+        if ((float) $total?->shipping_cost > 0) {
             $items[] = [
                 'id' => 'SHIPPING',
-                'price' => (int) round((float) $order->shipping_cost),
+                'price' => (int) round((float) $total->shipping_cost),
                 'quantity' => 1,
                 'name' => 'Ongkir internal',
             ];

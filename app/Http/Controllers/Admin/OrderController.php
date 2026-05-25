@@ -8,7 +8,6 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Services\Orders\OrderStatusTransitionService;
 use App\Support\Navigation\DashboardNavigation;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -16,49 +15,37 @@ use Inertia\Response;
 
 class OrderController extends Controller
 {
-    public function __construct(private readonly OrderStatusTransitionService $transitions)
-    {
-    }
-
     public function index(Request $request): Response
     {
         $filters = $request->validate([
             'keyword' => ['nullable', 'string', 'max:100'],
             'order_status' => ['nullable', Rule::in(['', ...OrderStatusTransitionService::STATUSES])],
             'payment_status' => ['nullable', Rule::in(['', 'pending', 'success', 'failed', 'expired', 'cancelled'])],
-            'shipment_status' => ['nullable', Rule::in(['', 'belum_dijadwalkan', 'dijadwalkan', 'dalam_pengiriman', 'terkirim', 'gagal_dikirim'])],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ]);
 
         $orders = Order::query()
-            ->with(['user:id,name,email', 'shipment:id,order_id,status', 'payments' => fn ($query) => $query->latest('attempt_number')])
+            ->with(['user:id,name,email,phone', 'address', 'total', 'delivery', 'payments' => fn ($query) => $query->latest('attempt_number')])
             ->withCount('items')
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('order_number', 'like', "%{$keyword}%")
-                        ->orWhere('customer_name', 'like', "%{$keyword}%")
-                        ->orWhere('customer_phone', 'like', "%{$keyword}%")
-                        ->orWhereHas('user', fn ($query) => $query->where('email', 'like', "%{$keyword}%"))
+                        ->orWhereHas('user', fn ($query) => $query
+                            ->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('email', 'like', "%{$keyword}%")
+                            ->orWhere('phone', 'like', "%{$keyword}%"))
+                        ->orWhereHas('address', fn ($query) => $query
+                            ->where('recipient_name', 'like', "%{$keyword}%")
+                            ->orWhere('phone', 'like', "%{$keyword}%")
+                            ->orWhere('formatted_address', 'like', "%{$keyword}%"))
                         ->orWhereHas('payments', fn ($query) => $query
                             ->where('midtrans_order_id', 'like', "%{$keyword}%")
                             ->orWhere('midtrans_transaction_id', 'like', "%{$keyword}%"));
                 });
             })
             ->when($filters['order_status'] ?? null, fn ($query, string $status) => $query->where('order_status', $status))
-            ->when($filters['payment_status'] ?? null, fn ($query, string $status) => $query->where('payment_status', $status))
-            ->when($filters['shipment_status'] ?? null, function ($query, string $status) {
-                if ($status === 'belum_dijadwalkan') {
-                    $query->where(function ($query) {
-                        $query->whereDoesntHave('shipment')
-                            ->orWhereHas('shipment', fn ($query) => $query->where('status', 'belum_dijadwalkan'));
-                    });
-
-                    return;
-                }
-
-                $query->whereHas('shipment', fn ($query) => $query->where('status', $status));
-            })
+            ->when($filters['payment_status'] ?? null, fn ($query, string $status) => $query->whereHas('payments', fn ($query) => $query->where('status', $status)))
             ->when($filters['date_from'] ?? null, fn ($query, string $date) => $query->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'] ?? null, fn ($query, string $date) => $query->whereDate('created_at', '<=', $date))
             ->latest()
@@ -77,26 +64,25 @@ class OrderController extends Controller
                 'keyword' => $filters['keyword'] ?? '',
                 'order_status' => $filters['order_status'] ?? '',
                 'payment_status' => $filters['payment_status'] ?? '',
-                'shipment_status' => $filters['shipment_status'] ?? '',
                 'date_from' => $filters['date_from'] ?? '',
                 'date_to' => $filters['date_to'] ?? '',
             ],
             'orderStatusOptions' => $this->orderStatusOptions(true),
             'paymentStatusOptions' => $this->paymentStatusOptions(true),
-            'shipmentStatusOptions' => $this->shipmentStatusOptions(true),
         ]);
     }
 
     public function show(Request $request, Order $order): Response
     {
         $order->load([
-            'user:id,name,email',
-            'items.product:id,name',
+            'user:id,name,email,phone',
+            'address',
+            'total',
+            'delivery',
+            'voucherSnapshot',
+            'shippingSnapshot',
             'items.variant:id,sku,variant_name,stock,reserved_stock,status',
             'payments' => fn ($query) => $query->latest('attempt_number'),
-            'shipment',
-            'voucher:id,code,name,status',
-            'store:id,name',
         ]);
         $order->loadCount('items');
 
@@ -108,36 +94,27 @@ class OrderController extends Controller
                 ['label' => $order->order_number, 'href' => route('admin.orders.show', $order)],
             ],
             'order' => $this->detailPayload($order),
-            'orderStatusOptions' => $this->orderStatusOptions(false),
         ]);
-    }
-
-    public function update(Request $request, Order $order): RedirectResponse
-    {
-        $data = $request->validate([
-            'order_status' => ['required', Rule::in(OrderStatusTransitionService::STATUSES)],
-        ]);
-
-        $this->transitions->updateByAdmin($order, $data['order_status']);
-
-        return back()->with('success', 'Status pesanan diperbarui.');
     }
 
     private function summaryPayload(Order $order): array
     {
         $latestPayment = $order->payments->first();
+        $address = $order->address;
 
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
             'created_at' => $order->created_at?->toIso8601String(),
-            'customer_name' => $order->customer_name,
-            'customer_phone' => $order->customer_phone,
+            'customer_name' => $address?->recipient_name ?: $order->user?->name,
+            'customer_phone' => $address?->phone ?: $order->user?->phone,
             'customer_email' => $order->user?->email,
             'total_amount' => (float) $order->total_amount,
             'order_status' => $order->order_status,
             'payment_status' => $order->payment_status,
-            'shipment_status' => $order->shipment?->status ?? 'belum_dijadwalkan',
+            'can_manage_shipment' => $order->payment_status === 'success'
+                && in_array($order->order_status, ['diproses', 'dalam_perjalanan', 'barang_diterima'], true),
+            'allowed_order_statuses' => $this->allowedOrderStatuses($order),
             'items_count' => $order->items_count,
             'latest_payment' => $latestPayment ? [
                 'id' => $latestPayment->id,
@@ -152,25 +129,29 @@ class OrderController extends Controller
 
     private function detailPayload(Order $order): array
     {
+        $address = $order->address;
+        $voucher = $order->voucherSnapshot;
+        $shipping = $order->shippingSnapshot;
+
         return [
             ...$this->summaryPayload($order),
-            'shipping_address' => $order->shipping_address,
-            'shipping_city' => $order->shipping_city,
-            'shipping_district' => $order->shipping_district,
-            'shipping_postal_code' => $order->shipping_postal_code,
-            'shipping_latitude' => (float) $order->shipping_latitude,
-            'shipping_longitude' => (float) $order->shipping_longitude,
-            'shipping_note' => $order->shipping_note,
+            'shipping_address' => $address?->formatted_address,
+            'shipping_city' => $address?->city,
+            'shipping_district' => $address?->district,
+            'shipping_postal_code' => $address?->postal_code,
+            'shipping_latitude' => $address?->latitude === null ? null : (float) $address->latitude,
+            'shipping_longitude' => $address?->longitude === null ? null : (float) $address->longitude,
+            'shipping_note' => collect([$address?->detail, $order->customer_note])->filter()->join("\n\n") ?: null,
             'subtotal_amount' => (float) $order->subtotal_amount,
             'discount_amount' => (float) $order->discount_amount,
             'shipping_cost' => (float) $order->shipping_cost,
-            'voucher' => $order->voucher ? [
-                'code' => $order->voucher->code,
-                'name' => $order->voucher->name,
-                'status' => $order->voucher->status,
+            'voucher' => $voucher ? [
+                'code' => $voucher->voucher_code,
+                'name' => $voucher->voucher_name,
+                'status' => $order->voucher?->status,
             ] : null,
-            'store' => $order->store ? [
-                'name' => $order->store->name,
+            'store' => $shipping ? [
+                'name' => $shipping->origin_name,
             ] : null,
             'items' => $order->items->map(fn (OrderItem $item) => [
                 'id' => $item->id,
@@ -190,15 +171,7 @@ class OrderController extends Controller
                 ] : null,
             ])->values(),
             'payments' => $order->payments->map(fn (Payment $payment) => $this->paymentPayload($payment, true))->values(),
-            'shipment' => $order->shipment ? [
-                'status' => $order->shipment->status,
-                'scheduled_at' => $order->shipment->scheduled_at?->toIso8601String(),
-                'delivered_at' => $order->shipment->delivered_at?->toIso8601String(),
-                'driver_name' => $order->shipment->driver_name,
-                'driver_phone' => $order->shipment->driver_phone,
-                'vehicle_note' => $order->shipment->vehicle_note,
-                'shipping_note' => $order->shipment->shipping_note,
-            ] : null,
+            'shipment' => $this->shipmentPayload($order),
             'timeline' => $this->timeline($order),
         ];
     }
@@ -249,19 +222,12 @@ class OrderController extends Controller
 
     private function timeline(Order $order): array
     {
-        if ($order->order_status === 'dibatalkan') {
-            return [
-                ['label' => 'Pesanan dibuat', 'description' => 'Order diterima sistem.', 'state' => 'completed'],
-                ['label' => 'Pesanan dibatalkan', 'description' => 'Pesanan tidak dilanjutkan.', 'state' => 'current'],
-            ];
-        }
-
         return [
             ['label' => 'Pesanan dibuat', 'description' => 'Order diterima sistem.', 'state' => 'completed'],
-            ['label' => $order->order_status === 'perlu_review_admin' ? 'Perlu review admin' : 'Pembayaran berhasil', 'description' => $order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran Midtrans.', 'state' => $order->payment_status === 'success' || $order->order_status === 'perlu_review_admin' ? 'completed' : 'current'],
-            ['label' => 'Pesanan diproses', 'description' => 'Tim toko menyiapkan sofa.', 'state' => in_array($order->order_status, ['diproses', 'dikirim', 'selesai'], true) ? 'completed' : 'pending'],
-            ['label' => 'Pesanan dikirim', 'description' => 'Pengiriman internal toko berjalan.', 'state' => in_array($order->order_status, ['dikirim', 'selesai'], true) ? 'completed' : 'pending'],
-            ['label' => 'Pesanan selesai', 'description' => 'Pesanan diterima pelanggan.', 'state' => $order->order_status === 'selesai' ? 'completed' : 'pending'],
+            ['label' => 'Pembayaran berhasil', 'description' => $order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran Midtrans.', 'state' => $order->payment_status === 'success' ? 'completed' : 'current'],
+            ['label' => 'Pesanan diproses', 'description' => 'Tim toko menyiapkan sofa.', 'state' => in_array($order->order_status, ['diproses', 'dalam_perjalanan', 'barang_diterima'], true) ? 'completed' : 'pending'],
+            ['label' => 'Dalam perjalanan', 'description' => 'Pengiriman internal toko berjalan.', 'state' => in_array($order->order_status, ['dalam_perjalanan', 'barang_diterima'], true) ? 'completed' : 'pending'],
+            ['label' => 'Barang diterima', 'description' => 'Pesanan diterima pelanggan.', 'state' => $order->order_status === 'barang_diterima' ? 'completed' : 'pending'],
         ];
     }
 
@@ -281,11 +247,27 @@ class OrderController extends Controller
         return $withAll ? $options->prepend(['value' => '', 'label' => 'Semua pembayaran'])->values()->all() : $options->values()->all();
     }
 
-    private function shipmentStatusOptions(bool $withAll): array
+    private function allowedOrderStatuses(Order $order): array
     {
-        $options = collect(['belum_dijadwalkan', 'dijadwalkan', 'dalam_pengiriman', 'terkirim', 'gagal_dikirim'])
-            ->map(fn (string $status) => ['value' => $status, 'label' => str_replace('_', ' ', $status)]);
+        return array_values(array_unique([
+            $order->order_status,
+            ...app(OrderStatusTransitionService::class)->nextStatusesForAdmin($order),
+        ]));
+    }
 
-        return $withAll ? $options->prepend(['value' => '', 'label' => 'Semua pengiriman'])->values()->all() : $options->values()->all();
+    private function shipmentPayload(Order $order): ?array
+    {
+        if (! $order->delivery_scheduled_at && ! $order->driver_name) {
+            return null;
+        }
+
+        return [
+            'scheduled_at' => $order->delivery_scheduled_at?->toIso8601String(),
+            'delivered_at' => $order->delivery_delivered_at?->toIso8601String(),
+            'driver_name' => $order->driver_name,
+            'driver_phone' => $order->driver_phone,
+            'vehicle_note' => $order->vehicle_note,
+            'shipping_note' => $order->delivery_note,
+        ];
     }
 }

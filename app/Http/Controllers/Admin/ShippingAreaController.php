@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Store;
+use App\Models\ShippingSetting;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,12 +21,11 @@ class ShippingAreaController extends Controller
             'is_active' => ['nullable', Rule::in(['', '1', '0'])],
         ]);
 
-        $areas = Store::query()
-            ->withCount('orders')
+        $areas = ShippingSetting::query()
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
-                    $query->where('name', 'like', "%{$keyword}%")
-                        ->orWhere('description', 'like', "%{$keyword}%");
+                    $query->where('origin_name', 'like', "%{$keyword}%")
+                        ->orWhere('origin_address', 'like', "%{$keyword}%");
                 });
             })
             ->when(($filters['is_active'] ?? '') !== '', fn ($query) => $query->where('is_active', (bool) $filters['is_active']))
@@ -34,13 +33,13 @@ class ShippingAreaController extends Controller
             ->latest()
             ->paginate(12)
             ->withQueryString()
-            ->through(fn (Store $area) => $this->payload($area));
+            ->through(fn (ShippingSetting $area) => $this->payload($area));
 
-        $currentRule = Store::query()
+        $currentRule = ShippingSetting::query()
             ->where('is_active', true)
             ->latest()
             ->first()
-            ?? Store::query()->latest()->first();
+            ?? ShippingSetting::query()->latest()->first();
 
         return Inertia::render('Admin/ShippingAreas/Index', [
             'navigationGroups' => DashboardNavigation::forUser($request->user()),
@@ -68,22 +67,22 @@ class ShippingAreaController extends Controller
 
         DB::transaction(function () use ($data) {
             if ($data['is_active']) {
-                Store::query()->where('is_active', true)->update(['is_active' => false]);
+                ShippingSetting::query()->where('is_active', true)->update(['is_active' => false]);
             }
 
-            Store::create($data);
+            ShippingSetting::create($data);
         });
 
         return back()->with('success', 'Aturan ongkir radius disimpan.');
     }
 
-    public function update(Request $request, Store $shippingArea): RedirectResponse
+    public function update(Request $request, ShippingSetting $shippingArea): RedirectResponse
     {
         $data = $this->validatedData($request, $shippingArea);
 
         DB::transaction(function () use ($shippingArea, $data) {
             if ($data['is_active']) {
-                Store::query()
+                ShippingSetting::query()
                     ->whereKeyNot($shippingArea->id)
                     ->where('is_active', true)
                     ->update(['is_active' => false]);
@@ -95,56 +94,54 @@ class ShippingAreaController extends Controller
         return back()->with('success', 'Aturan ongkir radius diperbarui.');
     }
 
-    public function destroy(Store $shippingArea): RedirectResponse
+    public function destroy(ShippingSetting $shippingArea): RedirectResponse
     {
-        if ($shippingArea->orders()->exists()) {
-            $shippingArea->update(['is_active' => false]);
-
-            return back()->with('success', 'Aturan sudah pernah dipakai order, status diubah menjadi nonaktif.');
-        }
-
         $shippingArea->delete();
 
         return back()->with('success', 'Aturan ongkir radius dihapus.');
     }
 
-    private function validatedData(Request $request, ?Store $store = null): array
+    private function validatedData(Request $request, ?ShippingSetting $shippingSetting = null): array
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'latitude' => [$store ? 'nullable' : 'required', 'numeric', 'between:-90,90'],
-            'longitude' => [$store ? 'nullable' : 'required', 'numeric', 'between:-180,180'],
+            'latitude' => [$shippingSetting ? 'nullable' : 'required', 'numeric', 'between:-90,90'],
+            'longitude' => [$shippingSetting ? 'nullable' : 'required', 'numeric', 'between:-180,180'],
             'radius_km' => ['required', 'numeric', 'gt:0', 'max:1000'],
             'shipping_cost' => ['required', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 
-        $data['is_active'] = $request->boolean('is_active');
-        $data['priority'] = 0;
-
-        if ($store && ! isset($data['latitude'], $data['longitude'])) {
-            $data['latitude'] = (float) $store->latitude;
-            $data['longitude'] = (float) $store->longitude;
+        if ($shippingSetting && ! isset($data['latitude'], $data['longitude'])) {
+            $data['latitude'] = (float) $shippingSetting->origin_latitude;
+            $data['longitude'] = (float) $shippingSetting->origin_longitude;
         }
 
-        return $data;
+        return [
+            'origin_name' => trim((string) $data['name']),
+            'origin_address' => filled($data['description'] ?? null) ? trim((string) $data['description']) : null,
+            'origin_latitude' => (float) $data['latitude'],
+            'origin_longitude' => (float) $data['longitude'],
+            'radius_km' => (float) $data['radius_km'],
+            'shipping_cost_per_km' => (float) $data['shipping_cost'],
+            'is_active' => $request->boolean('is_active'),
+        ];
     }
 
-    private function payload(Store $area): array
+    private function payload(ShippingSetting $area): array
     {
         return [
             'id' => $area->id,
-            'name' => $area->name,
-            'description' => $area->description,
-            'latitude' => (float) $area->latitude,
-            'longitude' => (float) $area->longitude,
+            'name' => $area->origin_name,
+            'description' => $area->origin_address,
+            'latitude' => (float) $area->origin_latitude,
+            'longitude' => (float) $area->origin_longitude,
             'radius_km' => (float) $area->radius_km,
-            'shipping_cost' => (float) $area->shipping_cost,
-            'shipping_cost_per_km' => (float) $area->shipping_cost,
+            'shipping_cost' => (float) $area->shipping_cost_per_km,
+            'shipping_cost_per_km' => (float) $area->shipping_cost_per_km,
             'is_active' => $area->is_active,
-            'orders_count' => $area->orders_count ?? $area->orders()->count(),
-            'center_summary' => number_format((float) $area->latitude, 5).', '.number_format((float) $area->longitude, 5),
+            'center_summary' => number_format((float) $area->origin_latitude, 5).', '.number_format((float) $area->origin_longitude, 5),
         ];
     }
 }

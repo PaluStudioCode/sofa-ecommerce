@@ -17,8 +17,9 @@ class CartController extends Controller
     {
         $items = CartItem::query()
             ->with([
-                'product.category:id,name',
                 'variant:id,product_id,sku,variant_name,size,material,color,price,stock,reserved_stock,status',
+                'variant.product:id,category_id,name,slug,status',
+                'variant.product.category:id,name',
                 'variant.images:id,product_variant_id,file_path,is_primary,sort_order',
             ])
             ->where('user_id', $request->user()->id)
@@ -64,11 +65,10 @@ class CartController extends Controller
         $this->assertPurchasable($variant, $newQuantity);
 
         $item->fill([
-            'product_id' => $variant->product_id,
             'quantity' => $newQuantity,
         ])->save();
 
-        return redirect()->route('cart.index')->with('success', 'Produk ditambahkan ke keranjang.');
+        return back()->with('success', 'Produk ditambahkan ke keranjang.');
     }
 
     public function update(Request $request, CartItem $cartItem): RedirectResponse
@@ -99,13 +99,13 @@ class CartController extends Controller
     private function payload(CartItem $item): array
     {
         $variant = $item->variant;
-        $product = $item->product;
+        $product = $variant?->product;
         $availableStock = $variant?->availableStock() ?? 0;
         $warning = $this->warningFor($item, $availableStock);
 
         return [
             'id' => $item->id,
-            'product_id' => $item->product_id,
+            'product_id' => $product?->id ?? $variant?->product_id,
             'product_variant_id' => $item->product_variant_id,
             'product_name' => $product?->name,
             'product_slug' => $product?->slug,
@@ -140,7 +140,7 @@ class CartController extends Controller
 
     private function warningFor(CartItem $item, int $availableStock): ?string
     {
-        if ($item->product?->status !== 'aktif') {
+        if ($item->variant?->product?->status !== 'aktif') {
             return 'Produk sudah tidak aktif dan tidak bisa checkout.';
         }
 

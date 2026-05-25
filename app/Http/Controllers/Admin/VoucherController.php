@@ -16,9 +16,7 @@ use Inertia\Response;
 
 class VoucherController extends Controller
 {
-    public function __construct(private readonly VoucherStatusService $statuses)
-    {
-    }
+    public function __construct(private readonly VoucherStatusService $statuses) {}
 
     public function index(Request $request): Response
     {
@@ -31,7 +29,7 @@ class VoucherController extends Controller
         ]);
 
         $vouchers = Voucher::query()
-            ->withCount('usages')
+            ->withCount('orders')
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('code', 'like', "%{$keyword}%")
@@ -87,7 +85,7 @@ class VoucherController extends Controller
     public function update(VoucherRequest $request, Voucher $voucher): RedirectResponse
     {
         $data = $this->formData($request);
-        $data = $this->statuses->normalize($data, $voucher->used_count);
+        $data = $this->statuses->normalize($data, $voucher->orders()->count());
 
         $voucher->update($data);
 
@@ -96,7 +94,7 @@ class VoucherController extends Controller
 
     public function destroy(Voucher $voucher): RedirectResponse
     {
-        if ($voucher->usages()->exists() || $voucher->orders()->exists()) {
+        if ($voucher->orders()->exists()) {
             $voucher->update(['status' => 'nonaktif']);
 
             return back()->with('success', 'Voucher sudah pernah digunakan, status diubah menjadi nonaktif.');
@@ -119,6 +117,8 @@ class VoucherController extends Controller
 
     private function payload(Voucher $voucher): array
     {
+        $usedCount = $voucher->orders_count ?? $voucher->orders()->count();
+
         return [
             'id' => $voucher->id,
             'code' => $voucher->code,
@@ -129,12 +129,12 @@ class VoucherController extends Controller
             'max_discount' => $voucher->max_discount !== null ? (float) $voucher->max_discount : null,
             'minimum_purchase' => (float) $voucher->minimum_purchase,
             'quota' => $voucher->quota,
-            'used_count' => $voucher->used_count,
+            'used_count' => $usedCount,
             'per_user_limit' => $voucher->per_user_limit,
             'start_at' => $voucher->start_at?->format('Y-m-d\TH:i'),
             'end_at' => $voucher->end_at?->format('Y-m-d\TH:i'),
             'status' => $voucher->status,
-            'usages_count' => $voucher->usages_count ?? $voucher->usages()->count(),
+            'usages_count' => $usedCount,
         ];
     }
 

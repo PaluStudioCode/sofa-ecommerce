@@ -68,7 +68,6 @@ function formatDate(value) {
                                 <div class="flex flex-wrap gap-2">
                                     <StatusBadge :status="order.order_status" />
                                     <StatusBadge :status="order.payment_status" />
-                                    <StatusBadge :status="order.shipment_status" :label="order.shipment_label" />
                                 </div>
                                 <AppButton :href="route('orders.show', order.id)" variant="secondary">
                                     <Eye class="h-4 w-4" />

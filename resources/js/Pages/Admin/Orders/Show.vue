@@ -1,29 +1,51 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
+import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
+import LeafletLocationPreview from '@/Components/UI/LeafletLocationPreview.vue';
+import Modal from '@/Components/Modal.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, PackageCheck, ReceiptText, Truck } from '@lucide/vue';
+import { ArrowLeft, CreditCard, MapPinned, PackageCheck, ReceiptText, Truck, X } from '@lucide/vue';
 
 const props = defineProps({
     navigationGroups: { type: Array, default: () => [] },
     breadcrumbs: { type: Array, default: () => [] },
     order: { type: Object, required: true },
-    orderStatusOptions: { type: Array, default: () => [] },
 });
 
-const statusForm = useForm({
-    order_status: props.order.order_status,
-});
-
-const latestPayment = computed(() => props.order.payments?.[0] || null);
+const mapModalOpen = ref(false);
+const shipmentModalOpen = ref(false);
 const hasShipment = computed(() => Boolean(props.order.shipment));
+const hasShippingCoordinates = computed(() => Number.isFinite(Number(props.order.shipping_latitude)) && Number.isFinite(Number(props.order.shipping_longitude)));
 
-function updateStatus() {
-    statusForm.put(route('admin.orders.update', props.order.id), { preserveScroll: true });
-}
+const statusLabels = {
+    diproses: 'Diproses',
+    dalam_perjalanan: 'Dalam perjalanan',
+    barang_diterima: 'Barang diterima',
+};
+const orderStatusOptions = [
+    { value: 'diproses', label: 'Diproses' },
+    { value: 'dalam_perjalanan', label: 'Dalam perjalanan' },
+    { value: 'barang_diterima', label: 'Barang diterima' },
+];
+const availableOrderStatusOptions = computed(() => {
+    const allowed = props.order.allowed_order_statuses || [props.order.order_status];
+
+    return orderStatusOptions.filter((option) => allowed.includes(option.value));
+});
+const shipmentForm = useForm({
+    order_status: 'diproses',
+    scheduled_at: '',
+    delivered_at: '',
+    driver_name: '',
+    driver_phone: '',
+    vehicle_note: '',
+    shipping_note: '',
+});
+const shouldShowDeliveredAt = computed(() => shipmentForm.order_status === 'barang_diterima');
 
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
@@ -41,6 +63,83 @@ function formatDate(value) {
         timeStyle: 'short',
     }).format(new Date(value));
 }
+
+function formatDateOnly(value) {
+    if (!value) return '-';
+
+    return new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'medium',
+    }).format(new Date(value));
+}
+
+function dateInputValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    return String(value).slice(0, 10);
+}
+
+function todayInputValue() {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+
+    return date.toISOString().slice(0, 10);
+}
+
+function orderStatusLabel(status) {
+    return statusLabels[status] || status;
+}
+
+function fillShipmentForm() {
+    shipmentForm.order_status = props.order.order_status || 'diproses';
+    shipmentForm.scheduled_at = dateInputValue(props.order.shipment?.scheduled_at);
+    shipmentForm.delivered_at = dateInputValue(props.order.shipment?.delivered_at);
+    shipmentForm.driver_name = props.order.shipment?.driver_name || '';
+    shipmentForm.driver_phone = props.order.shipment?.driver_phone || '';
+    shipmentForm.vehicle_note = props.order.shipment?.vehicle_note || '';
+    shipmentForm.shipping_note = props.order.shipment?.shipping_note || '';
+    shipmentForm.clearErrors();
+}
+
+function openShipmentModal() {
+    fillShipmentForm();
+    shipmentModalOpen.value = true;
+}
+
+function closeShipmentModal() {
+    if (!shipmentForm.processing) {
+        shipmentModalOpen.value = false;
+    }
+}
+
+function submitShipment() {
+    shipmentForm.put(route('admin.shipments.update', props.order.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            shipmentForm.clearErrors();
+            shipmentModalOpen.value = false;
+        },
+    });
+}
+
+watch(() => shipmentForm.order_status, (status) => {
+    if (!shipmentModalOpen.value) {
+        return;
+    }
+
+    if (['dalam_perjalanan', 'barang_diterima'].includes(status) && !shipmentForm.scheduled_at) {
+        shipmentForm.scheduled_at = todayInputValue();
+    }
+
+    if (status === 'barang_diterima' && !shipmentForm.delivered_at) {
+        shipmentForm.delivered_at = todayInputValue();
+    }
+
+    if (status !== 'barang_diterima' && shipmentForm.delivered_at) {
+        shipmentForm.delivered_at = '';
+    }
+});
 </script>
 
 <template>
@@ -50,12 +149,6 @@ function formatDate(value) {
         <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-neutral-text">{{ order.order_number }}</h2>
-                <p class="mt-1 text-sm text-neutral-muted">{{ order.customer_name }} - {{ order.customer_phone }}</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <StatusBadge :status="order.order_status" />
-                    <StatusBadge :status="order.payment_status" />
-                    <StatusBadge :status="order.shipment_status" />
-                </div>
             </div>
 
             <div class="flex flex-col gap-2 sm:flex-row">
@@ -64,28 +157,6 @@ function formatDate(value) {
                     Kembali
                 </AppButton>
             </div>
-        </div>
-
-        <div class="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <section class="rounded-md border border-neutral-border bg-white p-4">
-                <p class="text-sm text-neutral-muted">Total</p>
-                <p class="mt-2 text-xl font-bold text-neutral-text">{{ formatRupiah(order.total_amount) }}</p>
-            </section>
-            <section class="rounded-md border border-neutral-border bg-white p-4">
-                <p class="text-sm text-neutral-muted">Pembayaran</p>
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <StatusBadge :status="order.payment_status" />
-                    <span v-if="latestPayment" class="text-sm font-semibold text-neutral-text">#{{ latestPayment.attempt_number }}</span>
-                </div>
-            </section>
-            <section class="rounded-md border border-neutral-border bg-white p-4">
-                <p class="text-sm text-neutral-muted">Pengiriman</p>
-                <div class="mt-2"><StatusBadge :status="order.shipment_status" /></div>
-            </section>
-            <section class="rounded-md border border-neutral-border bg-white p-4">
-                <p class="text-sm text-neutral-muted">Item</p>
-                <p class="mt-2 text-xl font-bold text-neutral-text">{{ order.items_count }}</p>
-            </section>
         </div>
 
         <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -163,27 +234,47 @@ function formatDate(value) {
                 </section>
 
                 <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
-                    <h3 class="font-semibold text-neutral-text">Alamat Pengiriman</h3>
-                    <div class="mt-4 grid gap-2 text-sm text-neutral-muted">
-                        <p class="font-semibold text-neutral-text">{{ order.customer_name }} - {{ order.customer_phone }}</p>
-                        <p>{{ order.customer_email }}</p>
-                        <p>{{ order.shipping_address }}</p>
-                        <p>{{ [order.shipping_city, order.shipping_district, order.shipping_postal_code].filter(Boolean).join(', ') }}</p>
-                        <p v-if="order.shipping_note" class="rounded-md bg-neutral-light p-3">{{ order.shipping_note }}</p>
-                        <p v-if="order.store">Titik asal: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 class="font-semibold text-neutral-text">Alamat Pengiriman</h3>
+                        <AppButton v-if="hasShippingCoordinates" type="button" variant="secondary" @click="mapModalOpen = true">
+                            <MapPinned class="h-4 w-4" />
+                            Lihat Maps
+                        </AppButton>
                     </div>
+                    <dl class="mt-4 grid gap-3 text-sm">
+                        <div>
+                            <dt class="text-neutral-muted">Nama penerima</dt>
+                            <dd class="font-semibold text-neutral-text">{{ order.customer_name }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-neutral-muted">No telepon</dt>
+                            <dd class="font-semibold text-neutral-text">{{ order.customer_phone }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-neutral-muted">Email akun</dt>
+                            <dd class="text-neutral-text">{{ order.customer_email }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-neutral-muted">Alamat dari maps</dt>
+                            <dd class="text-neutral-text">{{ order.shipping_address }}</dd>
+                        </div>
+                        <div v-if="[order.shipping_city, order.shipping_district, order.shipping_postal_code].filter(Boolean).length">
+                            <dt class="text-neutral-muted">Area</dt>
+                            <dd class="text-neutral-text">{{ [order.shipping_city, order.shipping_district, order.shipping_postal_code].filter(Boolean).join(', ') }}</dd>
+                        </div>
+                        <div v-if="order.shipping_note">
+                            <dt class="text-neutral-muted">Detail alamat / catatan</dt>
+                            <dd class="whitespace-pre-line rounded-md bg-neutral-light p-3 text-neutral-text">{{ order.shipping_note }}</dd>
+                        </div>
+                        <div v-if="order.store">
+                            <dt class="text-neutral-muted">Titik asal</dt>
+                            <dd class="font-semibold text-neutral-text">{{ order.store.name }}</dd>
+                        </div>
+                    </dl>
                 </section>
             </div>
 
             <aside class="grid h-fit content-start gap-5">
-                <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
-                    <h3 class="font-semibold text-neutral-text">Ubah Status</h3>
-                    <form class="mt-4 grid gap-3" @submit.prevent="updateStatus">
-                        <FormSelect id="order_status_update" v-model="statusForm.order_status" label="Status pesanan" :options="orderStatusOptions" :error="statusForm.errors.order_status" />
-                        <AppButton type="submit" :loading="statusForm.processing">Simpan</AppButton>
-                    </form>
-                </section>
-
                 <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
                     <h3 class="font-semibold text-neutral-text">Ringkasan Total</h3>
                     <div class="mt-4 grid gap-3 text-sm">
@@ -224,15 +315,120 @@ function formatDate(value) {
                         <h3 class="font-semibold text-neutral-text">Pengiriman</h3>
                     </div>
                     <div v-if="hasShipment" class="grid gap-2 text-sm text-neutral-muted">
-                        <div class="flex justify-between gap-3"><span>Status</span><StatusBadge :status="order.shipment.status" /></div>
-                        <div class="flex justify-between gap-3"><span>Jadwal</span><span>{{ formatDate(order.shipment.scheduled_at) }}</span></div>
-                        <div class="flex justify-between gap-3"><span>Terkirim</span><span>{{ formatDate(order.shipment.delivered_at) }}</span></div>
+                        <div class="flex justify-between gap-3"><span>Status</span><StatusBadge :status="order.order_status" /></div>
+                        <div class="flex justify-between gap-3"><span>Jadwal</span><span>{{ formatDateOnly(order.shipment.scheduled_at) }}</span></div>
+                        <div class="flex justify-between gap-3"><span>Barang diterima</span><span>{{ formatDateOnly(order.shipment.delivered_at) }}</span></div>
                         <div class="flex justify-between gap-3"><span>Petugas</span><span>{{ order.shipment.driver_name || '-' }}</span></div>
                         <p v-if="order.shipment.shipping_note" class="rounded-md bg-neutral-light p-3">{{ order.shipment.shipping_note }}</p>
                     </div>
                     <p v-else class="text-sm text-neutral-muted">Belum ada pengiriman.</p>
+                    <div class="mt-4">
+                        <AppButton v-if="order.can_manage_shipment" type="button" class="w-full" @click="openShipmentModal">
+                            <Truck class="h-4 w-4" />
+                            Kelola Pengiriman
+                        </AppButton>
+                        <p v-else class="text-sm text-neutral-muted">Pengiriman bisa dikelola setelah pembayaran berhasil.</p>
+                    </div>
                 </section>
             </aside>
         </div>
+
+        <Modal :show="mapModalOpen" max-width="4xl" @close="mapModalOpen = false">
+            <section class="p-5">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-text">Titik Lokasi Pengiriman</h2>
+                        <p class="mt-1 text-sm text-neutral-muted">{{ order.customer_name }} - {{ order.customer_phone }}</p>
+                    </div>
+                    <button type="button" class="grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="mapModalOpen = false">
+                        <X class="h-4 w-4" />
+                        <span class="sr-only">Tutup</span>
+                    </button>
+                </div>
+
+                <LeafletLocationPreview
+                    :latitude="order.shipping_latitude"
+                    :longitude="order.shipping_longitude"
+                    :address="order.shipping_address"
+                    marker-label="Titik pengiriman"
+                />
+            </section>
+        </Modal>
+
+        <Modal :show="shipmentModalOpen" max-width="3xl" :closeable="!shipmentForm.processing" @close="closeShipmentModal">
+            <form class="flex max-h-[calc(100vh-3rem)] flex-col" @submit.prevent="submitShipment">
+                <div class="border-b border-neutral-border px-5 py-4 sm:px-6">
+                    <div class="flex items-start gap-3">
+                        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-primary-soft text-neutral-text">
+                            <Truck class="h-5 w-5" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-lg font-semibold text-neutral-text">Kelola Pengiriman</h3>
+                            <p class="mt-1 break-words text-sm leading-5 text-neutral-muted">{{ order.order_number }} - {{ order.shipping_address || 'Alamat belum tersedia' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                    <div class="mb-5 rounded-md border border-neutral-border bg-neutral-light p-4">
+                        <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold uppercase tracking-normal text-neutral-muted">Status order</p>
+                                <p class="mt-1 font-semibold text-neutral-text">{{ orderStatusLabel(shipmentForm.order_status) }}</p>
+                            </div>
+                            <div class="flex items-start sm:justify-end">
+                                <StatusBadge :status="shipmentForm.order_status" :label="orderStatusLabel(shipmentForm.order_status)" />
+                            </div>
+                            <dl class="grid gap-3 text-sm sm:col-span-2 sm:grid-cols-3">
+                                <div>
+                                    <dt class="text-neutral-muted">Customer</dt>
+                                    <dd class="mt-1 font-semibold text-neutral-text">{{ order.customer_name || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-neutral-muted">Telepon</dt>
+                                    <dd class="mt-1 font-semibold text-neutral-text">{{ order.customer_phone || '-' }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-neutral-muted">Total</dt>
+                                    <dd class="mt-1 font-semibold text-neutral-text">{{ formatRupiah(order.total_amount) }}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-5 lg:grid-cols-2">
+                        <div class="grid content-start gap-4">
+                            <h4 class="text-sm font-semibold text-neutral-text">Status dan jadwal</h4>
+                            <FormSelect id="delivery_order_status" v-model="shipmentForm.order_status" label="Status order" :options="availableOrderStatusOptions" :error="shipmentForm.errors.order_status" required />
+                            <FormInput id="delivery_scheduled_at" v-model="shipmentForm.scheduled_at" type="date" label="Tanggal mulai perjalanan" :error="shipmentForm.errors.scheduled_at" />
+                            <FormInput v-if="shouldShowDeliveredAt" id="delivery_delivered_at" v-model="shipmentForm.delivered_at" type="date" label="Tanggal barang diterima" :error="shipmentForm.errors.delivered_at" required />
+                        </div>
+
+                        <div class="grid content-start gap-4">
+                            <h4 class="text-sm font-semibold text-neutral-text">Petugas pengiriman</h4>
+                            <FormInput id="delivery_driver_name" v-model="shipmentForm.driver_name" label="Nama petugas" :error="shipmentForm.errors.driver_name" />
+                            <FormInput id="delivery_driver_phone" v-model="shipmentForm.driver_phone" label="Nomor petugas" :error="shipmentForm.errors.driver_phone" />
+                            <FormInput id="delivery_vehicle_note" v-model="shipmentForm.vehicle_note" label="Catatan kendaraan" :error="shipmentForm.errors.vehicle_note" />
+                        </div>
+
+                        <label class="block lg:col-span-2" for="delivery_shipping_note">
+                            <span class="text-sm font-medium text-neutral-text">Catatan pengiriman</span>
+                            <textarea id="delivery_shipping_note" v-model="shipmentForm.shipping_note" rows="4" class="mt-1 block min-h-28 w-full resize-y rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" />
+                            <p v-if="shipmentForm.errors.shipping_note" class="mt-1 text-sm text-danger">{{ shipmentForm.errors.shipping_note }}</p>
+                        </label>
+                    </div>
+
+                    <p v-if="shipmentForm.errors.order" class="mt-3 text-sm text-danger">{{ shipmentForm.errors.order }}</p>
+                </div>
+
+                <div class="flex flex-col-reverse gap-2 border-t border-neutral-border px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+                    <AppButton type="button" variant="secondary" @click="closeShipmentModal">Batal</AppButton>
+                    <AppButton type="submit" :loading="shipmentForm.processing">
+                        <Truck class="h-4 w-4" />
+                        Simpan Pengiriman
+                    </AppButton>
+                </div>
+            </form>
+        </Modal>
     </AuthenticatedLayout>
 </template>

@@ -20,7 +20,6 @@ const orderColumns = [
     { key: 'total_amount', label: 'Total' },
     { key: 'order_status', label: 'Order' },
     { key: 'payment_status', label: 'Bayar' },
-    { key: 'shipment_status', label: 'Kirim' },
 ];
 
 function formatRupiah(value) {
@@ -53,7 +52,6 @@ function formatRupiah(value) {
                     <template #cell-total_amount="{ value }">{{ formatRupiah(value) }}</template>
                     <template #cell-order_status="{ value }"><StatusBadge :status="value" /></template>
                     <template #cell-payment_status="{ value }"><StatusBadge :status="value" /></template>
-                    <template #cell-shipment_status="{ value }"><StatusBadge :status="value" /></template>
                     <template #empty>
                         <EmptyState title="Belum ada pesanan" />
                     </template>

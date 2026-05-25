@@ -39,6 +39,14 @@ function formatDate(value) {
     }).format(new Date(value));
 }
 
+function formatDateOnly(value) {
+    if (!value) return '-';
+
+    return new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'medium',
+    }).format(new Date(value));
+}
+
 function snapScriptUrl() {
     return props.paymentGateway?.isProduction
         ? 'https://app.midtrans.com/snap/snap.js'
@@ -142,18 +150,10 @@ onMounted(() => {
                         <h1 class="mt-3 text-3xl font-bold text-neutral-text">{{ order.order_number }}</h1>
                         <p class="mt-1 text-sm text-neutral-muted">Dibuat {{ formatDate(order.created_at) }}</p>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <StatusBadge :status="order.order_status" />
-                        <StatusBadge :status="order.payment_status" />
-                        <StatusBadge :status="order.shipment_status" :label="order.shipment_label" />
-                    </div>
                 </div>
 
-                <Alert v-if="order.order_status === 'perlu_review_admin'" tone="warning" class="mb-5">
-                    Pembayaran diterima, tetapi pesanan sedang dicek admin karena stok perlu diverifikasi.
-                </Alert>
                 <Alert v-if="['failed', 'expired', 'cancelled'].includes(latestPayment?.status)" tone="warning" class="mb-5">
-                    Pembayaran terakhir belum berhasil. Buat pembayaran baru jika pesanan belum dibatalkan dan belum dibayar.
+                    Pembayaran terakhir belum berhasil. Buat pembayaran baru jika belum ada pembayaran yang aktif.
                 </Alert>
                 <Alert v-if="retryPaymentForm.errors.order || retryPaymentForm.errors.stock" tone="danger" class="mb-5">
                     {{ retryPaymentForm.errors.order || retryPaymentForm.errors.stock }}
@@ -162,12 +162,9 @@ onMounted(() => {
                 <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
                     <div class="grid min-w-0 gap-5">
                         <section class="rounded-md border border-neutral-border bg-white p-5">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <h2 class="text-lg font-semibold text-neutral-text">Status Pesanan</h2>
-                                    <p class="mt-1 text-sm text-neutral-muted">Perkembangan pesanan dari pembayaran sampai pengiriman selesai.</p>
-                                </div>
-                                <StatusBadge :status="order.shipment_status" :label="order.shipment_label" />
+                            <div>
+                                <h2 class="text-lg font-semibold text-neutral-text">Status Pesanan</h2>
+                                <p class="mt-1 text-sm text-neutral-muted">Perkembangan pesanan dari pembayaran sampai barang diterima.</p>
                             </div>
 
                             <ol class="mt-5 grid gap-3">
@@ -354,15 +351,15 @@ onMounted(() => {
                 <div class="mt-5 grid gap-3 text-sm">
                     <div class="flex justify-between gap-3">
                         <span class="text-neutral-muted">Status</span>
-                        <StatusBadge :status="order.shipment_status" :label="order.shipment_label" />
+                        <StatusBadge :status="order.order_status" />
                     </div>
                     <div v-if="order.shipment?.scheduled_at" class="flex justify-between gap-3">
                         <span class="text-neutral-muted">Jadwal</span>
-                        <span class="text-right font-semibold text-neutral-text">{{ formatDate(order.shipment.scheduled_at) }}</span>
+                        <span class="text-right font-semibold text-neutral-text">{{ formatDateOnly(order.shipment.scheduled_at) }}</span>
                     </div>
                     <div v-if="order.shipment?.delivered_at" class="flex justify-between gap-3">
                         <span class="text-neutral-muted">Terkirim</span>
-                        <span class="text-right font-semibold text-neutral-text">{{ formatDate(order.shipment.delivered_at) }}</span>
+                        <span class="text-right font-semibold text-neutral-text">{{ formatDateOnly(order.shipment.delivered_at) }}</span>
                     </div>
                     <div v-if="order.shipment?.driver_name" class="flex justify-between gap-3">
                         <span class="text-neutral-muted">Petugas</span>

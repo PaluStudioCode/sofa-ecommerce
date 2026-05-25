@@ -1,12 +1,11 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { MapPin } from '@lucide/vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
-import FormInput from '@/Components/UI/FormInput.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import VoucherInput from '@/Components/UI/VoucherInput.vue';
 
@@ -17,7 +16,6 @@ const props = defineProps({
     voucherCode: { type: String, default: '' },
 });
 
-const page = usePage();
 const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
 
 const quoteForm = useForm({
@@ -25,17 +23,17 @@ const quoteForm = useForm({
 });
 
 const orderForm = useForm({
-    customer_phone: page.props.auth.user?.phone || '',
-    shipping_note: '',
     voucher_code: props.voucherCode || '',
 });
 
-const canCreateOrder = computed(() => props.summary.can_submit && props.items.length > 0);
 const hasSavedAddress = computed(() => Boolean(props.location?.formatted_address)
     && props.location?.latitude !== null
     && props.location?.latitude !== undefined
     && props.location?.longitude !== null
     && props.location?.longitude !== undefined);
+const hasRecipientDetails = computed(() => Boolean(props.location?.recipient_name) && Boolean(props.location?.phone) && Boolean(props.location?.detail));
+const isAddressReady = computed(() => hasSavedAddress.value && hasRecipientDetails.value);
+const canCreateOrder = computed(() => props.summary.can_submit && props.items.length > 0 && isAddressReady.value);
 const addressMeta = computed(() => [props.location?.district, props.location?.city, props.location?.postal_code].filter(Boolean).join(', '));
 
 function formatRupiah(value) {
@@ -110,8 +108,6 @@ function submitOrder() {
                         <section class="rounded-md border border-neutral-border bg-white p-5">
                             <h2 class="text-lg font-semibold text-neutral-text">Kontak dan alamat</h2>
                             <div class="mt-4 grid gap-4">
-                                <FormInput id="customer_phone" v-model="orderForm.customer_phone" label="Nomor telepon" :error="orderForm.errors.customer_phone" required />
-
                                 <section class="rounded-md border border-neutral-border bg-neutral-light p-4">
                                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div class="flex items-start gap-3">
@@ -119,24 +115,22 @@ function submitOrder() {
                                             <div>
                                                 <div class="flex flex-wrap items-center gap-2">
                                                     <h3 class="text-base font-semibold text-neutral-text">Alamat pengiriman</h3>
-                                                    <StatusBadge :status="hasSavedAddress ? 'aktif' : 'pending'" :label="hasSavedAddress ? 'Tersimpan' : 'Belum diatur'" />
+                                                    <StatusBadge :status="isAddressReady ? 'aktif' : 'pending'" :label="isAddressReady ? 'Lengkap' : 'Belum lengkap'" />
                                                 </div>
+                                                <p v-if="props.location?.recipient_name || props.location?.phone" class="mt-2 text-sm font-semibold text-neutral-text">
+                                                    {{ [props.location?.recipient_name, props.location?.phone].filter(Boolean).join(' - ') }}
+                                                </p>
                                                 <p v-if="hasSavedAddress" class="mt-2 text-sm font-semibold text-neutral-text">{{ location.formatted_address }}</p>
+                                                <p v-if="hasSavedAddress && location.detail" class="mt-1 text-sm text-neutral-muted">{{ location.detail }}</p>
                                                 <p v-if="hasSavedAddress && addressMeta" class="mt-1 text-sm text-neutral-muted">{{ addressMeta }}</p>
                                                 <p v-if="hasSavedAddress" class="mt-1 text-xs text-neutral-muted">{{ Number(location.latitude).toFixed(6) }}, {{ Number(location.longitude).toFixed(6) }}</p>
-                                                <p v-else class="mt-2 text-sm text-neutral-muted">Atur alamat pengiriman terlebih dahulu agar ongkir bisa dihitung.</p>
+                                                <p v-if="!isAddressReady" class="mt-2 text-sm text-neutral-muted">Lengkapi nama penerima, telepon, detail alamat, dan titik pengiriman agar ongkir bisa dihitung.</p>
                                             </div>
                                         </div>
-                                        <AppButton href="/address" variant="secondary">{{ hasSavedAddress ? 'Ubah Alamat' : 'Atur Alamat' }}</AppButton>
+                                        <AppButton href="/address" variant="secondary">{{ isAddressReady ? 'Ubah Alamat' : 'Lengkapi Alamat' }}</AppButton>
                                     </div>
                                     <p v-if="quoteForm.errors.location || orderForm.errors.location" class="mt-3 text-sm text-danger">{{ quoteForm.errors.location || orderForm.errors.location }}</p>
                                 </section>
-
-                                <label class="block" for="shipping_note">
-                                    <span class="text-sm font-medium text-neutral-text">Catatan alamat</span>
-                                    <textarea id="shipping_note" v-model="orderForm.shipping_note" rows="3" class="mt-1 block w-full rounded-md border-neutral-border text-sm text-neutral-text shadow-sm focus:border-primary-hover focus:ring-primary" placeholder="Nomor rumah, blok, patokan, atau instruksi pengiriman" />
-                                    <p v-if="orderForm.errors.shipping_note" class="mt-1 text-sm text-danger">{{ orderForm.errors.shipping_note }}</p>
-                                </label>
                             </div>
                         </section>
                     </div>
@@ -179,8 +173,8 @@ function submitOrder() {
                             </div>
                         </div>
 
-                        <Alert v-if="!summary.can_submit" tone="warning" class="mt-4">
-                            Atur alamat pengiriman yang masuk area layanan sebelum membuat pesanan.
+                        <Alert v-if="!canCreateOrder" tone="warning" class="mt-4">
+                            Lengkapi data penerima, detail alamat, dan pastikan titik pengiriman masuk area layanan.
                         </Alert>
                         <Alert v-if="orderForm.errors.cart" tone="danger" class="mt-4">{{ orderForm.errors.cart }}</Alert>
 

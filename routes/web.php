@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Admin\CategoryController;
-use App\Http\Controllers\Admin\LandingSectionController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\PaymentController as AdminPaymentController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
@@ -10,6 +9,7 @@ use App\Http\Controllers\Admin\ProductVariantController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\ShippingAreaController;
+use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VoucherController;
 use App\Http\Controllers\CartController;
@@ -63,13 +63,6 @@ Route::middleware(['auth', 'verified', 'role:customer'])->group(function () {
 
 Route::post('/midtrans/callback', MidtransCallbackController::class)->name('midtrans.callback');
 
-Route::middleware(['auth', 'verified', 'permission:manage_landing_content'])
-    ->prefix('dashboard')
-    ->name('admin.')
-    ->group(function () {
-        Route::resource('landing-sections', LandingSectionController::class)->except(['show']);
-    });
-
 Route::middleware(['auth', 'verified'])
     ->prefix('dashboard')
     ->name('admin.')
@@ -97,11 +90,17 @@ Route::middleware(['auth', 'verified'])
         Route::get('roles', [RoleController::class, 'index'])
             ->middleware('permission:manage_users')
             ->name('roles.index');
+        Route::get('system-settings', [SystemSettingController::class, 'index'])
+            ->middleware('permission:manage_system_settings')
+            ->name('system-settings.index');
+        Route::put('system-settings', [SystemSettingController::class, 'update'])
+            ->middleware('permission:manage_system_settings')
+            ->name('system-settings.update');
         Route::resource('vouchers', VoucherController::class)
             ->except(['show'])
             ->middleware('permission:manage_vouchers');
         Route::resource('orders', AdminOrderController::class)
-            ->only(['index', 'show', 'update'])
+            ->only(['index', 'show'])
             ->middleware('permission:manage_orders');
         Route::resource('payments', AdminPaymentController::class)
             ->only(['index', 'show'])
@@ -110,11 +109,11 @@ Route::middleware(['auth', 'verified'])
             ->only(['index', 'store', 'update', 'destroy'])
             ->parameters(['shipping-areas' => 'shippingArea'])
             ->middleware('permission:manage_shipping_areas');
-        Route::get('shipments', [ShipmentController::class, 'index'])
-            ->middleware('permission:manage_shipments')
+        Route::redirect('shipments', '/dashboard/orders')
+            ->middleware('permission:manage_orders')
             ->name('shipments.index');
         Route::put('shipments/{order}', [ShipmentController::class, 'update'])
-            ->middleware('permission:manage_shipments')
+            ->middleware('permission:manage_orders')
             ->name('shipments.update');
     });
 
