@@ -60,8 +60,7 @@ class CustomerAddressController extends Controller
             ->whereKeyNot($address->id)
             ->update(['is_default' => false]);
 
-        $user->forceFill(['phone' => $payload['phone']])->save();
-        $request->session()->put('checkout.location', $this->addressPayload($address->fresh(), $user->fresh()));
+        $request->session()->put('checkout.location', $this->addressPayload($address->fresh(), $user));
 
         return redirect()
             ->route('address.edit')

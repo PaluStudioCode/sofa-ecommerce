@@ -12,7 +12,7 @@ class ProfileTest extends TestCase
 
     public function test_profile_page_is_displayed(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createUser();
 
         $response = $this
             ->actingAs($user)
@@ -23,13 +23,14 @@ class ProfileTest extends TestCase
 
     public function test_profile_information_can_be_updated(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createUser();
 
         $response = $this
             ->actingAs($user)
             ->patch('/profile', [
                 'name' => 'Test User',
                 'email' => 'test@example.com',
+                'phone' => '081234567890',
             ]);
 
         $response
@@ -40,18 +41,26 @@ class ProfileTest extends TestCase
 
         $this->assertSame('Test User', $user->name);
         $this->assertSame('test@example.com', $user->email);
+        $this->assertSame('081234567890', $user->phone);
         $this->assertNull($user->email_verified_at);
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'phone' => '081234567890',
+        ]);
     }
 
     public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createUser();
 
         $response = $this
             ->actingAs($user)
             ->patch('/profile', [
                 'name' => 'Test User',
                 'email' => $user->email,
+                'phone' => $user->phone,
             ]);
 
         $response
@@ -63,7 +72,7 @@ class ProfileTest extends TestCase
 
     public function test_user_can_delete_their_account(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createUser();
 
         $response = $this
             ->actingAs($user)
@@ -81,7 +90,7 @@ class ProfileTest extends TestCase
 
     public function test_correct_password_must_be_provided_to_delete_account(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createUser();
 
         $response = $this
             ->actingAs($user)
@@ -95,5 +104,20 @@ class ProfileTest extends TestCase
             ->assertRedirect('/profile');
 
         $this->assertNotNull($user->fresh());
+    }
+
+    private function createUser(array $attributes = []): User
+    {
+        $user = new User();
+        $user->forceFill([
+            'name' => $attributes['name'] ?? 'Profile User',
+            'email' => $attributes['email'] ?? 'profile@example.test',
+            'phone' => $attributes['phone'] ?? '080000000000',
+            'password' => $attributes['password'] ?? 'password',
+            'role' => $attributes['role'] ?? 'customer',
+            'email_verified_at' => $attributes['email_verified_at'] ?? now(),
+        ])->save();
+
+        return $user;
     }
 }

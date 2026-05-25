@@ -213,7 +213,6 @@ class CheckoutController extends Controller
             }
 
             CartItem::where('user_id', $request->user()->id)->delete();
-            $request->user()->forceFill(['phone' => $address->phone ?: $request->user()->phone])->save();
 
             return $order;
         });

@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Models\Order;
+use App\Models\SystemSetting;
 use App\Services\Fonnte\FonnteNotificationClient;
 use Throwable;
 
@@ -53,6 +54,36 @@ class WhatsAppNotificationService
         };
     }
 
+    public function sendStorePaymentSuccess(Order $order): bool
+    {
+        $order->loadMissing(['user:id,name,phone', 'address', 'total']);
+        $storePhone = SystemSetting::storeContact()['whatsapp'] ?? null;
+
+        if (blank($storePhone)) {
+            return false;
+        }
+
+        $message = implode("\n", [
+            "Pembayaran pesanan {$order->order_number} sudah berhasil diterima.",
+            'Pelanggan: '.$this->customerName($order),
+            'Total: Rp '.number_format((float) $order->total_amount, 0, ',', '.'),
+            'Detail order: '.route('admin.orders.show', $order),
+        ]);
+
+        try {
+            $this->client->sendWhatsApp($storePhone, $message, [
+                'event' => 'store_payment_success',
+                'order_number' => $order->order_number,
+            ]);
+
+            return true;
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return false;
+    }
+
     private function message(Order $order, string $eventType): string
     {
         return strtr(self::EVENTS[$eventType], [
@@ -67,6 +98,11 @@ class WhatsAppNotificationService
 
     private function customerPhone(Order $order): ?string
     {
-        return $order->address?->phone ?: $order->user?->phone;
+        return $order->user?->phone ?: $order->address?->phone;
+    }
+
+    private function customerName(Order $order): string
+    {
+        return $order->address?->recipient_name ?: $order->user?->name ?: 'Customer';
     }
 }

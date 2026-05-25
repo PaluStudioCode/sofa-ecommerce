@@ -155,7 +155,10 @@ class PaymentAttemptService
 
             if ($mappedStatus === 'success') {
                 $this->settleOrder($order);
-                $this->notifications->sendOrderEvent($order->fresh(), 'payment_success');
+                $freshOrder = $order->fresh();
+
+                $this->notifications->sendOrderEvent($freshOrder, 'payment_success');
+                $this->notifications->sendStorePaymentSuccess($freshOrder);
 
                 return $lockedPayment->fresh();
             }
