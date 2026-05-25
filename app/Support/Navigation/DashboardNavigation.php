@@ -34,19 +34,13 @@ class DashboardNavigation
                 'label' => 'Penjualan',
                 'items' => [
                     self::item('Pesanan', 'admin.orders.index', '/dashboard/orders', 'ShoppingBag', 'manage_orders'),
-                    self::item('Pembayaran', 'admin.payments.index', '/dashboard/payments', 'CreditCard', 'manage_payments'),
                     self::item('Voucher', 'admin.vouchers.index', '/dashboard/vouchers', 'TicketPercent', 'manage_vouchers'),
-                ],
-            ],
-            [
-                'label' => 'Operasional',
-                'items' => [
-                    self::item('Aturan Ongkir Radius', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
                 ],
             ],
             [
                 'label' => 'Sistem',
                 'items' => [
+                    self::item('Aturan Ongkir Radius', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
                     self::item('Pengaturan Sistem', 'admin.system-settings.index', '/dashboard/system-settings', 'Settings', 'manage_system_settings'),
                     self::item('Pengguna', 'admin.users.index', '/dashboard/users', 'Users', 'manage_users'),
                 ],
