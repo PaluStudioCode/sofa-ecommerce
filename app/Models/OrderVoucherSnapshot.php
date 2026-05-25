@@ -11,11 +11,7 @@ class OrderVoucherSnapshot extends Model
 
     protected function casts(): array
     {
-        return [
-            'discount_value' => 'decimal:2',
-            'max_discount' => 'decimal:2',
-            'minimum_purchase' => 'decimal:2',
-        ];
+        return [];
     }
 
     public function order(): BelongsTo

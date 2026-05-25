@@ -106,7 +106,7 @@ Route::middleware(['auth', 'verified'])
             ->only(['index', 'show'])
             ->middleware('permission:manage_payments');
         Route::resource('shipping-areas', ShippingAreaController::class)
-            ->only(['index', 'store', 'update', 'destroy'])
+            ->only(['index', 'store', 'update'])
             ->parameters(['shipping-areas' => 'shippingArea'])
             ->middleware('permission:manage_shipping_areas');
         Route::redirect('shipments', '/dashboard/orders')

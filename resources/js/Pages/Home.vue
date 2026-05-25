@@ -31,7 +31,7 @@ const valueIcons = [markRaw(ShieldCheck), markRaw(Ruler), markRaw(Truck)];
 const heroSection = computed(() => props.sections.find((section) => section.section_key === 'hero') || {});
 const valueSections = computed(() => props.sections.filter((section) => section.section_key === 'value').slice(0, 3));
 
-const heroImage = computed(() => heroSection.value.image_url || props.featuredProducts[0]?.image_url || sofaFallback);
+const heroImage = computed(() => heroSection.value.image_url || sofaFallback);
 const heroCopy = computed(() => heroSection.value.subtitle || heroSection.value.title || 'Sofa pilihan untuk ruang keluarga yang terasa rapi, nyaman, dan siap dihuni setiap hari.');
 const primaryCtaLabel = computed(() => heroSection.value.button_label || 'Lihat Katalog');
 const primaryCtaUrl = computed(() => heroSection.value.button_url || '/catalog');

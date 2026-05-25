@@ -174,23 +174,12 @@ class CheckoutController extends Controller
                     'voucher_id' => $quote['voucher']['id'],
                     'voucher_code' => $quote['voucher']['code'],
                     'voucher_name' => $quote['voucher']['name'],
-                    'discount_type' => $quote['voucher']['discount_type'],
-                    'discount_value' => $quote['voucher']['discount_value'],
-                    'max_discount' => $quote['voucher']['max_discount'],
-                    'minimum_purchase' => $quote['voucher']['minimum_purchase'],
                 ]);
             }
 
             $order->shippingSnapshot()->create([
                 'shipping_setting_id' => $quote['store']['id'],
                 'origin_name' => $quote['store']['name'],
-                'origin_address' => $quote['store']['origin_address'],
-                'origin_latitude' => $quote['store']['origin_latitude'],
-                'origin_longitude' => $quote['store']['origin_longitude'],
-                'shipping_cost_per_km' => $quote['store']['shipping_cost_per_km'],
-                'distance_km' => $quote['store']['distance_km'],
-                'billable_distance_km' => $quote['store']['billable_distance_km'],
-                'shipping_cost' => $quote['shipping_cost'],
             ]);
 
             foreach ($cartItems as $item) {

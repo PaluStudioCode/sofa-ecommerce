@@ -11,14 +11,7 @@ class OrderShippingSnapshot extends Model
 
     protected function casts(): array
     {
-        return [
-            'origin_latitude' => 'decimal:8',
-            'origin_longitude' => 'decimal:8',
-            'shipping_cost_per_km' => 'decimal:2',
-            'distance_km' => 'decimal:2',
-            'billable_distance_km' => 'decimal:2',
-            'shipping_cost' => 'decimal:2',
-        ];
+        return [];
     }
 
     public function order(): BelongsTo

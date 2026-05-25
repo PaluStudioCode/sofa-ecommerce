@@ -40,7 +40,7 @@ class DashboardNavigation
             [
                 'label' => 'Sistem',
                 'items' => [
-                    self::item('Aturan Ongkir Radius', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
+                    self::item('Pengaturan Ongkir', 'admin.shipping-areas.index', '/dashboard/shipping-areas', 'Map', 'manage_shipping_areas'),
                     self::item('Pengaturan Sistem', 'admin.system-settings.index', '/dashboard/system-settings', 'Settings', 'manage_system_settings'),
                     self::item('Pengguna', 'admin.users.index', '/dashboard/users', 'Users', 'manage_users'),
                 ],

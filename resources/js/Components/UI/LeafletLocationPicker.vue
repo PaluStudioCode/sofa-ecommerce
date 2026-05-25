@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Crosshair, MapPinned } from '@lucide/vue';
+import { Crosshair, LocateFixed, MapPinned } from '@lucide/vue';
 import axios from 'axios';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -22,6 +22,7 @@ const props = defineProps({
     draggable: { type: Boolean, default: true },
     reverseOnMove: { type: Boolean, default: true },
     reverseGeocodeUrl: { type: String, default: '/maps/reverse-geocode' },
+    currentLocationLabel: { type: String, default: 'Lokasi saya' },
 });
 
 const emit = defineEmits([
@@ -30,10 +31,13 @@ const emit = defineEmits([
     'update:address',
     'address-details',
     'reverse-geocode-error',
+    'geolocation-error',
 ]);
 
 const mapEl = ref(null);
 const selectedAddress = ref(props.address);
+const locating = ref(false);
+const geolocationError = ref('');
 let map = null;
 let marker = null;
 let circle = null;
@@ -45,6 +49,7 @@ const reverseGeocodeCache = new Map();
 
 const fallbackCenter = [-0.9003, 119.8780];
 const hasPoint = computed(() => Number.isFinite(toNumber(props.latitude)) && Number.isFinite(toNumber(props.longitude)));
+const canUseGeolocation = computed(() => typeof navigator !== 'undefined' && 'geolocation' in navigator);
 const coordinateLabel = computed(() => {
     if (!hasPoint.value) {
         return '';
@@ -159,6 +164,30 @@ function reverseGeocodeErrorPayload(error, latLng) {
     };
 }
 
+function geolocationErrorMessage(error = null) {
+    const permissionDenied = 1;
+    const positionUnavailable = 2;
+    const timeout = 3;
+
+    if (!canUseGeolocation.value) {
+        return 'GPS tidak tersedia di browser ini.';
+    }
+
+    if (error?.code === permissionDenied) {
+        return 'Izin lokasi ditolak. Aktifkan izin lokasi di browser lalu coba lagi.';
+    }
+
+    if (error?.code === positionUnavailable) {
+        return 'Lokasi saat ini belum bisa ditemukan.';
+    }
+
+    if (error?.code === timeout) {
+        return 'Pengambilan lokasi terlalu lama. Coba lagi.';
+    }
+
+    return 'Gagal mengambil lokasi saat ini.';
+}
+
 function applyCoordinates(latLng, centerMap = true) {
     emit('update:latitude', Number(latLng.lat.toFixed(8)));
     emit('update:longitude', Number(latLng.lng.toFixed(8)));
@@ -229,11 +258,43 @@ async function fetchReverseGeocode(latLng, requestId) {
 function reverseGeocode(latLng) {
     const requestId = ++reverseGeocodeRequestId;
 
+    geolocationError.value = '';
     applyPoint(latLng);
 
     if (props.reverseOnMove) {
         fetchReverseGeocode(latLng, requestId);
     }
+}
+
+function useCurrentLocation() {
+    geolocationError.value = '';
+
+    if (!canUseGeolocation.value) {
+        geolocationError.value = geolocationErrorMessage();
+        emit('geolocation-error', { message: geolocationError.value, code: null });
+        return;
+    }
+
+    locating.value = true;
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            locating.value = false;
+            const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
+            reverseGeocode(latLng);
+            map?.setView(latLng, Math.max(map.getZoom(), 16));
+        },
+        (error) => {
+            locating.value = false;
+            geolocationError.value = geolocationErrorMessage(error);
+            emit('geolocation-error', { message: geolocationError.value, code: error.code });
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000,
+        },
+    );
 }
 
 function initMap() {
@@ -311,7 +372,19 @@ watch(() => [props.latitude, props.longitude, props.radiusKm], () => updateLayer
                 </div>
                 <p class="mt-1 text-xs text-neutral-muted">{{ helper }}</p>
             </div>
-            <slot name="actions" />
+            <div class="flex flex-wrap items-center gap-2">
+                <slot name="actions" />
+                <button
+                    type="button"
+                    class="inline-flex min-h-9 items-center gap-2 rounded-md border border-neutral-border bg-white px-3 text-sm font-semibold text-neutral-text transition hover:bg-neutral-light disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="locating"
+                    :title="currentLocationLabel"
+                    @click="useCurrentLocation"
+                >
+                    <LocateFixed class="h-4 w-4" />
+                    <span>{{ locating ? 'Mengambil...' : currentLocationLabel }}</span>
+                </button>
+            </div>
         </div>
 
         <div class="grid gap-3 p-4">
@@ -326,6 +399,7 @@ watch(() => [props.latitude, props.longitude, props.radiusKm], () => updateLayer
                     </div>
                 </div>
                 <p v-if="error" class="text-sm text-danger">{{ error }}</p>
+                <p v-if="geolocationError" class="text-sm text-danger">{{ geolocationError }}</p>
             </div>
         </div>
     </section>

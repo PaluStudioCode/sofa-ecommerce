@@ -40,7 +40,7 @@ class DashboardNavigationTest extends TestCase
                 ->where('navigationGroups.2.items.0.label', 'Pesanan')
                 ->where('navigationGroups.2.items.1.label', 'Voucher')
                 ->has('navigationGroups.3.items', 3)
-                ->where('navigationGroups.3.items.0.label', 'Aturan Ongkir Radius')
+                ->where('navigationGroups.3.items.0.label', 'Pengaturan Ongkir')
                 ->where('navigationGroups.3.items.1.label', 'Pengaturan Sistem')
                 ->where('navigationGroups.3.items.2.label', 'Pengguna')
             );

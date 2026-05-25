@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Voucher;
-use App\Models\VoucherUsage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -16,7 +16,7 @@ class AdminVoucherTest extends TestCase
 
     public function test_admin_can_create_update_filter_and_monitor_vouchers(): void
     {
-        $admin = User::factory()->admin()->create();
+        $admin = $this->user('admin');
 
         $this->actingAs($admin)
             ->post(route('admin.vouchers.store'), [
@@ -80,8 +80,10 @@ class AdminVoucherTest extends TestCase
 
     public function test_voucher_validation_rejects_duplicate_dates_negative_values_percentage_and_low_quota(): void
     {
-        $admin = User::factory()->admin()->create();
-        $voucher = Voucher::factory()->create(['code' => 'DUPLIKAT', 'used_count' => 2, 'quota' => 5]);
+        $admin = $this->user('admin');
+        $voucher = $this->voucher(['code' => 'DUPLIKAT', 'quota' => 5]);
+        $this->voucherOrder($voucher);
+        $this->voucherOrder($voucher);
 
         $base = [
             'code' => 'DUPLIKAT',
@@ -126,7 +128,7 @@ class AdminVoucherTest extends TestCase
 
     public function test_status_is_automatically_marked_expired_or_quota_habis(): void
     {
-        $admin = User::factory()->admin()->create();
+        $admin = $this->user('admin');
 
         $this->actingAs($admin)
             ->post(route('admin.vouchers.store'), [
@@ -149,12 +151,8 @@ class AdminVoucherTest extends TestCase
             'status' => 'kedaluwarsa',
         ]);
 
-        Voucher::factory()->create([
-            'code' => 'PENUH',
-            'quota' => 1,
-            'used_count' => 1,
-            'status' => 'aktif',
-        ]);
+        $full = $this->voucher(['code' => 'PENUH', 'quota' => 1, 'status' => 'aktif']);
+        $this->voucherOrder($full);
 
         $this->actingAs($admin)
             ->get(route('admin.vouchers.index', ['status' => 'kuota_habis']))
@@ -163,34 +161,19 @@ class AdminVoucherTest extends TestCase
                 ->where('vouchers.data.0.status', 'kuota_habis')
                 ->where('vouchers.data.0.code', 'PENUH')
             );
-
-        $this->assertDatabaseHas('vouchers', [
-            'code' => 'PENUH',
-            'status' => 'kuota_habis',
-        ]);
     }
 
-    public function test_used_voucher_is_disabled_instead_of_deleted_and_guest_landing_only_gets_active_voucher(): void
+    public function test_used_voucher_is_disabled_instead_of_deleted_and_guest_home_only_gets_active_voucher(): void
     {
-        $admin = User::factory()->admin()->create();
-        $customer = User::factory()->create();
-        $active = Voucher::factory()->create([
+        $admin = $this->user('admin');
+        $active = $this->voucher([
             'code' => 'AKTIFPROMO',
             'name' => 'Voucher Aktif',
             'status' => 'aktif',
             'quota' => 5,
-            'used_count' => 0,
         ]);
-        $used = Voucher::factory()->create([
-            'code' => 'SUDAHDIPAKAI',
-            'status' => 'aktif',
-        ]);
-        $order = Order::factory()->for($customer)->create(['voucher_id' => $used->id]);
-        VoucherUsage::factory()->create([
-            'voucher_id' => $used->id,
-            'user_id' => $customer->id,
-            'order_id' => $order->id,
-        ]);
+        $used = $this->voucher(['code' => 'SUDAHDIPAKAI', 'status' => 'aktif']);
+        $this->voucherOrder($used);
 
         $this->actingAs($admin)
             ->delete(route('admin.vouchers.destroy', $used))
@@ -202,6 +185,8 @@ class AdminVoucherTest extends TestCase
             'deleted_at' => null,
         ]);
 
+        auth()->logout();
+
         $this->get(route('home'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -211,10 +196,58 @@ class AdminVoucherTest extends TestCase
 
     public function test_voucher_management_is_admin_only(): void
     {
-        $customer = User::factory()->create();
+        $customer = $this->user('customer');
 
         $this->actingAs($customer)
             ->get(route('admin.vouchers.index'))
             ->assertForbidden();
+    }
+
+    private function user(string $role): User
+    {
+        return User::create([
+            'name' => ucfirst($role),
+            'email' => $role.'-'.uniqid().'@example.test',
+            'phone' => '08123456789',
+            'role' => $role,
+            'password' => Hash::make('password'),
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    private function voucher(array $overrides = []): Voucher
+    {
+        return Voucher::create([
+            'code' => $overrides['code'] ?? 'VOUCHER'.uniqid(),
+            'name' => $overrides['name'] ?? 'Voucher Test',
+            'description' => $overrides['description'] ?? null,
+            'discount_type' => $overrides['discount_type'] ?? 'nominal',
+            'discount_value' => $overrides['discount_value'] ?? 100000,
+            'max_discount' => $overrides['max_discount'] ?? null,
+            'minimum_purchase' => $overrides['minimum_purchase'] ?? 0,
+            'quota' => $overrides['quota'] ?? null,
+            'per_user_limit' => $overrides['per_user_limit'] ?? null,
+            'start_at' => $overrides['start_at'] ?? now()->subDay(),
+            'end_at' => $overrides['end_at'] ?? now()->addDay(),
+            'status' => $overrides['status'] ?? 'aktif',
+        ]);
+    }
+
+    private function voucherOrder(Voucher $voucher): Order
+    {
+        $customer = $this->user('customer');
+        $order = Order::create([
+            'order_number' => 'ORD-'.uniqid(),
+            'user_id' => $customer->id,
+            'order_status' => 'diproses',
+        ]);
+
+        $order->voucherSnapshot()->create([
+            'voucher_id' => $voucher->id,
+            'voucher_code' => $voucher->code,
+            'voucher_name' => $voucher->name,
+        ]);
+
+        return $order;
     }
 }
