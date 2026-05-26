@@ -13,8 +13,33 @@ const props = defineProps({
 });
 
 const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
-const selectedVariantId = ref(props.product.variants[0]?.id || null);
-const selectedImageIndex = ref(0);
+
+function toNumber(value) {
+    return Number(value || 0);
+}
+
+function initialVariantId() {
+    const thumbnailVariantId = toNumber(props.product.thumbnail_variant_id);
+    const thumbnailVariant = props.product.variants.find((variant) => toNumber(variant.id) === thumbnailVariantId);
+
+    return thumbnailVariant?.id || props.product.variants[0]?.id || null;
+}
+
+function defaultImageIndex(variantId) {
+    const variant = props.product.variants.find((item) => toNumber(item.id) === toNumber(variantId));
+    const primaryImageId = toNumber(props.product.primary_image_id);
+
+    if (!variant || !primaryImageId) {
+        return 0;
+    }
+
+    const thumbnailIndex = (variant.images || []).findIndex((image) => toNumber(image.id) === primaryImageId);
+
+    return thumbnailIndex >= 0 ? thumbnailIndex : 0;
+}
+
+const selectedVariantId = ref(initialVariantId());
+const selectedImageIndex = ref(defaultImageIndex(selectedVariantId.value));
 const quantity = ref(1);
 const page = usePage();
 const cartForm = useForm({
@@ -37,7 +62,7 @@ const selectedImageAlt = computed(() => activeImages.value[selectedImageIndex.va
 const canAdd = computed(() => selectedVariant.value?.can_add_to_cart && quantity.value >= 1 && quantity.value <= selectedVariant.value.available_stock);
 
 watch(selectedVariantId, () => {
-    selectedImageIndex.value = 0;
+    selectedImageIndex.value = defaultImageIndex(selectedVariantId.value);
 });
 
 watch(

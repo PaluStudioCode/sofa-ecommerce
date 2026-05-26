@@ -17,6 +17,7 @@ const paymentModalOpen = ref(false);
 const activeModal = ref(null);
 const snapLoading = ref(false);
 const retryPaymentForm = useForm({ return_to: 'order' });
+const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
 
 const latestPayment = computed(() => props.order.payment);
 const canOpenPayment = computed(() => props.order.can_open_payment && latestPayment.value?.snap_token);
@@ -45,6 +46,12 @@ function formatDateOnly(value) {
     return new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'medium',
     }).format(new Date(value));
+}
+
+function formatKilometer(value) {
+    return new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 2,
+    }).format(value || 0);
 }
 
 function snapScriptUrl() {
@@ -167,10 +174,11 @@ onMounted(() => {
                                 <p class="mt-1 text-sm text-neutral-muted">Perkembangan pesanan dari pembayaran sampai barang diterima.</p>
                             </div>
 
-                            <ol class="mt-5 grid gap-3">
-                                <li v-for="step in order.timeline" :key="step.label" class="grid grid-cols-[28px_1fr] gap-3">
+                            <ol class="mt-5 grid">
+                                <li v-for="(step, index) in order.timeline" :key="step.label" class="relative grid grid-cols-[28px_1fr] gap-3 pb-4 last:pb-0">
+                                    <span v-if="index < order.timeline.length - 1" class="absolute bottom-0 left-[13px] top-8 w-px bg-neutral-border" />
                                     <span
-                                        class="mt-1 grid h-7 w-7 place-items-center rounded-full border text-xs font-bold"
+                                        class="relative z-10 mt-1 grid h-7 w-7 place-items-center rounded-full border text-xs font-bold"
                                         :class="{
                                             'border-green-200 bg-green-50 text-success': step.state === 'completed',
                                             'border-yellow-200 bg-primary-soft text-neutral-text': step.state === 'current',
@@ -194,22 +202,23 @@ onMounted(() => {
                                 <h2 class="text-lg font-semibold text-neutral-text">Item Pesanan</h2>
                                 <p class="text-sm text-neutral-muted">{{ order.items.length }} item</p>
                             </div>
-                            <div class="mt-4 grid gap-3">
-                                <article v-for="item in order.items" :key="`${item.product_name}-${item.variant_sku}`" class="rounded-md border border-neutral-border p-4">
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                        <div>
-                                            <p class="font-semibold text-neutral-text">{{ item.product_name }}</p>
-                                            <p class="mt-1 text-sm text-neutral-muted">{{ item.variant_name || 'Varian standar' }}</p>
-                                            <p class="mt-1 text-sm text-neutral-muted">
-                                                {{ [item.variant_size, item.variant_material, item.variant_color].filter(Boolean).join(' / ') || '-' }}
-                                            </p>
+                            <div class="mt-4 max-h-[44vh] overflow-y-auto pr-1">
+                                <div class="grid gap-3">
+                                    <article v-for="item in order.items" :key="`${item.product_name}-${item.variant_sku}`" class="rounded-md border border-neutral-border p-3">
+                                        <div class="grid gap-3 sm:grid-cols-[72px_minmax(0,1fr)_auto] sm:items-center">
+                                            <img :src="item.image_url || sofaFallback" :alt="item.product_name" class="aspect-square w-full rounded-md object-cover" />
+                                            <div class="min-w-0">
+                                                <p class="truncate font-semibold text-neutral-text">{{ item.product_name }}</p>
+                                                <p class="mt-1 text-sm text-neutral-muted">{{ item.variant_name || 'Varian standar' }}</p>
+                                                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-muted">
+                                                    <span>{{ [item.variant_size, item.variant_material, item.variant_color].filter(Boolean).join(' / ') || '-' }}</span>
+                                                    <span>{{ item.quantity }} x {{ formatRupiah(item.product_price) }}</span>
+                                                </div>
+                                            </div>
+                                            <p class="text-sm font-semibold text-neutral-text sm:text-right">{{ formatRupiah(item.subtotal) }}</p>
                                         </div>
-                                        <div class="text-left sm:text-right">
-                                            <p class="text-sm text-neutral-muted">{{ item.quantity }} x {{ formatRupiah(item.product_price) }}</p>
-                                            <p class="mt-1 font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</p>
-                                        </div>
-                                    </div>
-                                </article>
+                                    </article>
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -332,6 +341,20 @@ onMounted(() => {
                     <p v-if="addressMeta" class="text-neutral-muted">{{ addressMeta }}</p>
                     <p v-if="order.shipping_note" class="rounded-md bg-neutral-light p-3 text-neutral-muted">{{ order.shipping_note }}</p>
                     <p v-if="order.store" class="text-neutral-muted">Titik asal pengiriman: <span class="font-semibold text-neutral-text">{{ order.store.name }}</span></p>
+                    <div v-if="order.store?.distance_km" class="grid gap-2 rounded-md bg-neutral-light p-3 text-sm">
+                        <div class="flex justify-between gap-3">
+                            <span class="text-neutral-muted">Jarak jalan</span>
+                            <span class="font-semibold text-neutral-text">{{ formatKilometer(order.store.distance_km) }} km</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="text-neutral-muted">Jarak ditagihkan</span>
+                            <span class="font-semibold text-neutral-text">{{ formatKilometer(order.store.billable_distance_km) }} km</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="text-neutral-muted">Tarif per KM</span>
+                            <span class="font-semibold text-neutral-text">{{ formatRupiah(order.store.shipping_cost_per_km) }}</span>
+                        </div>
+                    </div>
                 </div>
             </section>
         </Modal>

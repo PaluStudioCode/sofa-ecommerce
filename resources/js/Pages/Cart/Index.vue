@@ -67,35 +67,35 @@ async function removeItem(item) {
                     </template>
                 </EmptyState>
 
-                <div v-else class="grid gap-5 lg:grid-cols-[1fr_360px]">
-                    <div class="grid gap-3">
-                        <article v-for="item in items" :key="item.id" class="rounded-md border border-neutral-border bg-white p-4">
-                            <div class="grid gap-4 sm:grid-cols-[112px_1fr_auto]">
+                <div v-else class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                    <div class="max-h-[68vh] overflow-y-auto pr-1">
+                        <div class="grid gap-3">
+                            <article v-for="item in items" :key="item.id" class="rounded-md border border-neutral-border bg-white p-3">
+                            <div class="grid gap-3 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-center">
                                 <Link :href="route('products.show', item.product_slug)" class="block overflow-hidden rounded-md border border-neutral-border bg-neutral-light">
                                     <img :src="item.image_url || sofaFallback" :alt="item.product_name" class="aspect-square w-full object-cover" />
                                 </Link>
 
-                                <div>
+                                <div class="min-w-0">
                                     <div class="flex flex-wrap items-start gap-2">
                                         <div class="min-w-0 flex-1">
                                             <Link :href="route('products.show', item.product_slug)" class="font-semibold text-neutral-text hover:text-primary-hover">
                                                 {{ item.product_name }}
                                             </Link>
-                                            <p class="mt-1 text-sm text-neutral-muted">{{ item.category || 'Tanpa kategori' }}</p>
+                                            <p class="mt-1 text-sm text-neutral-muted">{{ item.variant_name || item.sku || 'Standar' }}</p>
                                         </div>
                                     </div>
 
-                                    <dl class="mt-3 grid gap-2 text-sm text-neutral-muted sm:grid-cols-2">
-                                        <div><dt class="font-medium text-neutral-text">Varian</dt><dd>{{ item.variant_name || item.sku || 'Standar' }}</dd></div>
-                                        <div><dt class="font-medium text-neutral-text">Spesifikasi</dt><dd>{{ [item.size, item.material, item.color].filter(Boolean).join(' / ') || '-' }}</dd></div>
-                                        <div><dt class="font-medium text-neutral-text">Harga saat ini</dt><dd>{{ formatRupiah(item.unit_price) }}</dd></div>
-                                        <div><dt class="font-medium text-neutral-text">Stok tersedia</dt><dd>{{ item.available_stock }}</dd></div>
-                                    </dl>
+                                    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-muted">
+                                        <span>{{ [item.size, item.material, item.color].filter(Boolean).join(' / ') || item.category || '-' }}</span>
+                                        <span>{{ formatRupiah(item.unit_price) }}</span>
+                                        <span>Stok {{ item.available_stock }}</span>
+                                    </div>
 
                                     <Alert v-if="item.warning" tone="warning" class="mt-3">{{ item.warning }}</Alert>
                                 </div>
 
-                                <div class="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end">
+                                <div class="flex flex-row items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
                                     <QuantityStepper :model-value="item.quantity" :min="1" :max="Math.max(1, item.available_stock)" @update:model-value="updateQuantity(item, $event)" />
                                     <p class="text-sm font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</p>
                                     <button type="button" class="inline-grid h-10 w-10 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="removeItem(item)">
@@ -105,9 +105,10 @@ async function removeItem(item) {
                                 </div>
                             </div>
                         </article>
+                        </div>
                     </div>
 
-                    <aside class="h-fit rounded-md border border-neutral-border bg-white p-5">
+                    <aside class="h-fit rounded-md border border-neutral-border bg-white p-5 lg:sticky lg:top-24">
                         <h2 class="text-lg font-semibold text-neutral-text">Ringkasan</h2>
                         <div class="mt-4 grid gap-3 text-sm">
                             <div class="flex justify-between gap-3">

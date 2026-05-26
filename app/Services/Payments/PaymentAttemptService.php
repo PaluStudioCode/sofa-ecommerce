@@ -20,6 +20,8 @@ class PaymentAttemptService
 
     public function createAttempt(Order $order): Payment
     {
+        $this->expireOverduePendingAttempts($order);
+
         return DB::transaction(function () use ($order) {
             /** @var Order $lockedOrder */
             $lockedOrder = Order::query()
@@ -171,6 +173,52 @@ class PaymentAttemptService
         });
     }
 
+    public function expireOverduePendingAttempts(?Order $order = null): int
+    {
+        $paymentIds = Payment::query()
+            ->where('status', 'pending')
+            ->whereNotNull('expired_at')
+            ->where('expired_at', '<=', now())
+            ->when($order, fn ($query) => $query->where('order_id', $order->id))
+            ->pluck('id');
+
+        $expiredCount = 0;
+
+        foreach ($paymentIds as $paymentId) {
+            DB::transaction(function () use ($paymentId, &$expiredCount) {
+                /** @var Payment|null $payment */
+                $payment = Payment::query()
+                    ->lockForUpdate()
+                    ->find($paymentId);
+
+                if (! $payment || $payment->status !== 'pending' || ! $payment->expired_at || $payment->expired_at->isFuture()) {
+                    return;
+                }
+
+                /** @var Order $order */
+                $order = Order::query()
+                    ->with('items')
+                    ->lockForUpdate()
+                    ->findOrFail($payment->order_id);
+
+                $payment->update([
+                    'status' => 'expired',
+                    'transaction_status' => 'expired',
+                    'expired_at' => now(),
+                    'raw_response' => [
+                        ...($payment->raw_response ?? []),
+                        'expired_locally_at' => now()->toIso8601String(),
+                    ],
+                ]);
+
+                $this->releaseReservedStock($order);
+                $expiredCount++;
+            });
+        }
+
+        return $expiredCount;
+    }
+
     private function assertCanCreateAttempt(Order $order): void
     {
         if ($order->payment_status === 'success' || $order->payments->contains('status', 'success')) {
@@ -234,7 +282,7 @@ class PaymentAttemptService
             $variant = ProductVariant::query()->lockForUpdate()->findOrFail($item->product_variant_id);
             $lockedVariants[$item->id] = $variant;
 
-            if ($variant->reserved_stock < $item->quantity || $variant->stock < $item->quantity) {
+            if ($variant->stock < $item->quantity) {
                 $canSettle = false;
             }
         }
@@ -256,7 +304,7 @@ class PaymentAttemptService
             $variant = $lockedVariants[$item->id];
             $variant->update([
                 'stock' => $variant->stock - $item->quantity,
-                'reserved_stock' => $variant->reserved_stock - $item->quantity,
+                'reserved_stock' => max(0, $variant->reserved_stock - $item->quantity),
             ]);
         }
 

@@ -23,8 +23,8 @@ class CatalogController extends Controller
         ]);
 
         $products = Product::query()
-            ->with(['category:id,name,slug', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
-            ->active()
+            ->with(['category:id,name,slug', 'primaryImage:id,product_variant_id,file_path,alt_text', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
+            ->visibleForCustomers()
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('name', 'like', "%{$keyword}%")
@@ -33,8 +33,8 @@ class CatalogController extends Controller
                 });
             })
             ->when($filters['category'] ?? null, fn ($query, $category) => $query->where('category_id', $category))
-            ->when($filters['min_price'] ?? null, fn ($query, $price) => $query->whereHas('variants', fn ($variant) => $variant->where('price', '>=', $price)))
-            ->when($filters['max_price'] ?? null, fn ($query, $price) => $query->whereHas('variants', fn ($variant) => $variant->where('price', '<=', $price)))
+            ->when($filters['min_price'] ?? null, fn ($query, $price) => $query->whereHas('variants', fn ($variant) => $variant->where('status', 'aktif')->where('price', '>=', $price)))
+            ->when($filters['max_price'] ?? null, fn ($query, $price) => $query->whereHas('variants', fn ($variant) => $variant->where('status', 'aktif')->where('price', '<=', $price)))
             ->latest()
             ->paginate(9)
             ->withQueryString()
@@ -57,10 +57,11 @@ class CatalogController extends Controller
 
     public function show(Product $product): Response
     {
-        abort_if($product->status !== 'aktif', 404);
+        abort_unless(Product::query()->whereKey($product->id)->visibleForCustomers()->exists(), 404);
 
         $product->load([
             'category:id,name,slug',
+            'primaryImage:id,product_variant_id,file_path,alt_text',
             'variants' => fn ($query) => $query
                 ->whereIn('status', ['aktif', 'stok_habis'])
                 ->with(['images' => fn ($imageQuery) => $imageQuery->orderBy('sort_order')->orderBy('id')])
@@ -75,6 +76,8 @@ class CatalogController extends Controller
                 'slug' => $product->slug,
                 'description' => $product->description,
                 'category' => $product->category?->only(['id', 'name', 'slug']),
+                'primary_image_id' => $product->primary_image_id,
+                'thumbnail_variant_id' => $product->primaryImage?->product_variant_id,
                 'variants' => $product->variants->map(fn (ProductVariant $variant) => [
                     'id' => $variant->id,
                     'sku' => $variant->sku,
@@ -93,6 +96,7 @@ class CatalogController extends Controller
                         'url' => MediaUrl::fromPath($image->file_path),
                         'alt_text' => $image->alt_text ?: $product->name,
                         'is_primary' => $image->is_primary,
+                        'is_product_thumbnail' => $product->primary_image_id === $image->id,
                     ]),
                 ]),
             ],
@@ -118,6 +122,14 @@ class CatalogController extends Controller
 
     private function primaryImage(Product $product): ?object
     {
+        $selectedImage = $product->relationLoaded('primaryImage')
+            ? $product->primaryImage
+            : $product->primaryImage()->first();
+
+        if ($selectedImage) {
+            return $selectedImage;
+        }
+
         return $product->variants
             ->flatMap(fn ($variant) => $variant->images)
             ->sortBy([

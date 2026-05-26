@@ -9,7 +9,7 @@ import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import Tabs from '@/Components/UI/Tabs.vue';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowLeft, Edit, GripVertical, ImagePlus, Images, Plus, Star, Trash2 } from '@lucide/vue';
+import { ArrowLeft, Edit, GripVertical, ImagePlus, Images, Plus, Trash2 } from '@lucide/vue';
 import ProductFormModal from './ProductFormModal.vue';
 import ProductImageFormModal from './ProductImageFormModal.vue';
 import ProductVariantFormModal from './ProductVariantFormModal.vue';
@@ -31,6 +31,7 @@ const imageModalOpen = ref(false);
 const selectedVariant = ref(null);
 const imageGroupModalOpen = ref(false);
 const managedUploadModalOpen = ref(false);
+const thumbnailModalOpen = ref(false);
 const selectedImageGroupKey = ref(null);
 const draggedManagedImageIndex = ref(null);
 const managedImageDropIndex = ref(null);
@@ -53,7 +54,6 @@ const imageColumns = [
     { key: 'variant_name', label: 'Varian' },
     { key: 'preview_images', label: 'Gambar' },
     { key: 'images_count', label: 'Jumlah' },
-    { key: 'primary_image', label: 'Utama' },
 ];
 
 const imageGroups = computed(() => {
@@ -80,11 +80,11 @@ const imageGroups = computed(() => {
         images_count: group.images.length,
         preview_images: group.images.slice(0, 5),
         remaining_images_count: Math.max(0, group.images.length - 5),
-        primary_image: group.images.find((image) => image.is_primary) || null,
     }));
 });
 
 const selectedImageGroup = computed(() => imageGroups.value.find((group) => group.key === selectedImageGroupKey.value));
+const selectedThumbnailId = computed(() => Number(props.product.primary_image_id || 0));
 const variantIdsWithImages = computed(() => new Set(props.product.images.map((image) => Number(image.product_variant_id))));
 const variantsWithoutImages = computed(() => props.product.variants.filter((variant) => !variantIdsWithImages.value.has(Number(variant.id))));
 const hasVariantsWithoutImages = computed(() => variantsWithoutImages.value.length > 0);
@@ -137,8 +137,31 @@ async function destroyVariant(variant) {
     }
 }
 
-function setPrimaryImage(image) {
-    router.put(route('admin.product-images.primary', image.id), {}, { preserveScroll: true, preserveState: true });
+function isProductThumbnail(image) {
+    return Number(image.id) === selectedThumbnailId.value;
+}
+
+function openThumbnailModal() {
+    thumbnailModalOpen.value = true;
+}
+
+function closeThumbnailModal() {
+    thumbnailModalOpen.value = false;
+}
+
+function setProductThumbnail(image) {
+    if (isProductThumbnail(image)) {
+        closeThumbnailModal();
+        return;
+    }
+
+    router.put(route('admin.products.thumbnail', props.product.id), {
+        image_id: image.id,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: closeThumbnailModal,
+    });
 }
 
 function moveManagedImage(fromIndex, toIndex) {
@@ -239,8 +262,8 @@ async function destroyImage(image) {
 
         <Tabs v-model="activeTab" :tabs="tabs" />
 
-        <section v-if="activeTab === 'info'" class="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div class="rounded-md border border-neutral-border bg-white p-5">
+        <section v-if="activeTab === 'info'" class="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="h-fit rounded-md border border-neutral-border bg-white p-5">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <p class="text-sm text-neutral-muted">{{ product.category || 'Tanpa kategori' }}</p>
@@ -249,10 +272,17 @@ async function destroyImage(image) {
                     <div class="flex flex-wrap gap-2">
                         <StatusBadge :status="product.status" />
                         <StatusBadge :status="product.is_featured ? 'aktif' : 'nonaktif'" :label="product.is_featured ? 'Unggulan' : 'Reguler'" />
+                        <StatusBadge :status="product.is_publish_ready ? 'aktif' : 'pending'" :label="product.is_publish_ready ? 'Siap tampil' : 'Belum siap tampil'" />
                     </div>
                 </div>
 
                 <p class="mt-4 text-sm leading-6 text-neutral-muted">{{ product.description }}</p>
+                <div v-if="product.publish_blockers?.length" class="mt-4 rounded-md border border-yellow-200 bg-primary-soft p-3 text-sm text-neutral-text">
+                    <p class="font-semibold">Syarat tampil di user belum lengkap:</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5">
+                        <li v-for="blocker in product.publish_blockers" :key="blocker">{{ blocker }}</li>
+                    </ul>
+                </div>
 
                 <div class="mt-5">
                     <AppButton type="button" @click="productModalOpen = true">
@@ -262,28 +292,20 @@ async function destroyImage(image) {
                 </div>
             </div>
 
-            <div class="rounded-md border border-neutral-border bg-white p-5">
+            <div class="h-fit rounded-md border border-neutral-border bg-white p-5">
                 <h3 class="font-semibold text-neutral-text">Ringkasan</h3>
-                <dl class="mt-4 grid gap-3 text-sm">
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-neutral-muted">Varian</dt>
-                        <dd class="font-semibold text-neutral-text">{{ product.variants.length }}</dd>
+                <div class="mt-4">
+                    <div class="aspect-[4/3] overflow-hidden rounded-md border border-neutral-border bg-neutral-light">
+                        <img v-if="product.image_url" :src="product.image_url" :alt="product.name" class="h-full w-full object-cover" />
+                        <div v-else class="grid h-full place-items-center text-sm text-neutral-muted">
+                            Belum ada thumbnail
+                        </div>
                     </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-neutral-muted">Gambar</dt>
-                        <dd class="font-semibold text-neutral-text">{{ product.images.length }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-neutral-muted">Stok tersedia</dt>
-                        <dd class="font-semibold text-neutral-text">{{ product.available_stock }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-neutral-muted">Harga aktif</dt>
-                        <dd class="text-right font-semibold text-neutral-text">
-                            {{ product.min_price === product.max_price ? formatRupiah(product.min_price) : `${formatRupiah(product.min_price)} - ${formatRupiah(product.max_price)}` }}
-                        </dd>
-                    </div>
-                </dl>
+                    <AppButton type="button" variant="secondary" class="mt-3 w-full" :disabled="!product.images.length" @click="openThumbnailModal">
+                        <Images class="h-4 w-4" />
+                        Ganti Thumbnail
+                    </AppButton>
+                </div>
             </div>
         </section>
 
@@ -363,13 +385,6 @@ async function destroyImage(image) {
                     </div>
                 </template>
                 <template #cell-images_count="{ value }">{{ value }}</template>
-                <template #cell-primary_image="{ value }">
-                    <div v-if="value" class="flex items-center gap-2">
-                        <img :src="value.url" :alt="value.alt_text || product.name" class="h-10 w-12 rounded-md object-cover" />
-                        <Star class="h-5 w-5 fill-yellow-400 text-yellow-500" />
-                    </div>
-                    <span v-else class="text-sm text-neutral-muted">-</span>
-                </template>
                 <template #actions="{ row }">
                     <AppButton type="button" variant="secondary" size="sm" @click="openImageGroup(row)">
                         <Images class="h-4 w-4" />
@@ -438,18 +453,11 @@ async function destroyImage(image) {
                             </span>
                             <img :src="image.url" :alt="image.alt_text || product.name" class="h-16 w-20 shrink-0 rounded-md object-cover" />
                             <div class="min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <p class="truncate text-sm font-semibold text-neutral-text">{{ image.alt_text || product.name }}</p>
-                                    <Star v-if="image.is_primary" class="h-4 w-4 shrink-0 fill-yellow-400 text-yellow-500" />
-                                </div>
+                                <p class="truncate text-sm font-semibold text-neutral-text">{{ image.alt_text || product.name }}</p>
                                 <p class="text-xs text-neutral-muted">Urutan {{ index + 1 }}</p>
                             </div>
                         </div>
                         <div class="flex shrink-0 justify-end gap-2">
-                            <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="setPrimaryImage(image)">
-                                <Star class="h-4 w-4" :class="image.is_primary ? 'fill-yellow-400 text-yellow-500' : ''" />
-                                <span class="sr-only">Jadikan utama</span>
-                            </button>
                             <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="destroyImage(image)">
                                 <Trash2 class="h-4 w-4" />
                                 <span class="sr-only">Hapus</span>
@@ -459,6 +467,41 @@ async function destroyImage(image) {
                 </div>
 
                 <EmptyState v-else title="Belum ada gambar" />
+            </div>
+        </Modal>
+        <Modal :show="thumbnailModalOpen" max-width="5xl" @close="closeThumbnailModal">
+            <div class="p-6">
+                <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-text">Ganti Thumbnail</h2>
+                        <p class="mt-1 text-sm text-neutral-muted">{{ product.name }}</p>
+                    </div>
+                    <AppButton type="button" variant="secondary" @click="closeThumbnailModal">Tutup</AppButton>
+                </div>
+
+                <div v-if="product.images.length" class="grid max-h-[70vh] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <button
+                        v-for="image in product.images"
+                        :key="image.id"
+                        type="button"
+                        class="overflow-hidden rounded-md border bg-white text-left transition hover:border-primary-hover"
+                        :class="isProductThumbnail(image) ? 'border-primary-hover ring-2 ring-primary-soft' : 'border-neutral-border'"
+                        @click="setProductThumbnail(image)"
+                    >
+                        <img :src="image.url" :alt="image.alt_text || product.name" class="aspect-[4/3] w-full object-cover" />
+                        <div class="grid gap-2 p-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-neutral-text">{{ image.alt_text || product.name }}</p>
+                                    <p class="mt-0.5 truncate text-xs text-neutral-muted">{{ image.variant_name || 'Varian' }}</p>
+                                </div>
+                                <StatusBadge v-if="isProductThumbnail(image)" status="aktif" label="Thumbnail" />
+                            </div>
+                        </div>
+                    </button>
+                </div>
+
+                <EmptyState v-else title="Belum ada gambar produk" />
             </div>
         </Modal>
         <ProductImageFormModal

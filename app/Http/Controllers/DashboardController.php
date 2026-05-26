@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\Payments\PaymentAttemptService;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,8 +12,10 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, PaymentAttemptService $payments): Response
     {
+        $payments->expireOverduePendingAttempts();
+
         return Inertia::render('Dashboard', [
             'navigationGroups' => DashboardNavigation::forUser($request->user()),
             'breadcrumbs' => [

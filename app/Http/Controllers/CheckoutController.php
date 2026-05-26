@@ -53,30 +53,6 @@ class CheckoutController extends Controller
         ]);
     }
 
-    public function resolveLocation(Request $request): RedirectResponse
-    {
-        $data = $request->validate([
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'formatted_address' => ['required', 'string', 'max:2000'],
-            'city' => ['nullable', 'string', 'max:255'],
-            'district' => ['nullable', 'string', 'max:255'],
-            'postal_code' => ['nullable', 'string', 'max:20'],
-        ]);
-
-        $location = $this->locationFromRequest($data);
-
-        $request->session()->put('checkout.location', $location);
-
-        $redirect = redirect()->route('checkout.index');
-
-        if ($request->boolean('auto_update')) {
-            return $redirect;
-        }
-
-        return $redirect->with('success', 'Lokasi pengiriman dipilih.');
-    }
-
     public function quoteRequest(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -185,6 +161,16 @@ class CheckoutController extends Controller
             $order->shippingSnapshot()->create([
                 'shipping_setting_id' => $quote['store']['id'],
                 'origin_name' => $quote['store']['name'],
+                'origin_address' => $quote['store']['origin_address'],
+                'origin_latitude' => $quote['store']['origin_latitude'],
+                'origin_longitude' => $quote['store']['origin_longitude'],
+                'shipping_cost_per_km' => $quote['store']['shipping_cost_per_km'],
+                'distance_km' => $quote['store']['distance_km'],
+                'billable_distance_km' => $quote['store']['billable_distance_km'],
+                'shipping_cost' => $quote['shipping_cost'],
+                'duration_seconds' => $quote['store']['duration_seconds'],
+                'distance_provider' => $quote['store']['distance_provider'],
+                'route_geometry' => $quote['store']['route_geometry'],
             ]);
 
             foreach ($cartItems as $item) {
@@ -432,7 +418,7 @@ class CheckoutController extends Controller
             throw ValidationException::withMessages(['voucher_code' => 'Voucher sudah berakhir atau belum aktif.']);
         }
 
-        if ($voucher->quota !== null && $voucher->orders()->count() >= $voucher->quota) {
+        if ($voucher->quota !== null && $this->paidVoucherUsageCount($voucher) >= $voucher->quota) {
             throw ValidationException::withMessages(['voucher_code' => 'Kuota voucher sudah habis.']);
         }
 
@@ -444,6 +430,7 @@ class CheckoutController extends Controller
             $usedByUser = Order::query()
                 ->where('user_id', $userId)
                 ->whereHas('voucherSnapshot', fn ($query) => $query->where('voucher_id', $voucher->id))
+                ->whereHas('payments', fn ($query) => $query->where('status', 'success'))
                 ->count();
 
             if ($usedByUser >= $voucher->per_user_limit) {
@@ -452,6 +439,13 @@ class CheckoutController extends Controller
         }
 
         return $voucher;
+    }
+
+    private function paidVoucherUsageCount(Voucher $voucher): int
+    {
+        return (int) $voucher->voucherSnapshots()
+            ->whereHas('order.payments', fn ($query) => $query->where('status', 'success'))
+            ->count();
     }
 
     private function discountAmount(Voucher $voucher, float $subtotal): float
@@ -465,21 +459,6 @@ class CheckoutController extends Controller
         return $voucher->max_discount !== null
             ? min($discount, (float) $voucher->max_discount)
             : $discount;
-    }
-
-    private function locationFromRequest(array $data): array
-    {
-        return [
-            'recipient_name' => $data['recipient_name'] ?? null,
-            'phone' => $data['phone'] ?? null,
-            'detail' => $data['detail'] ?? null,
-            'formatted_address' => trim((string) $data['formatted_address']),
-            'city' => filled($data['city'] ?? null) ? trim((string) $data['city']) : null,
-            'district' => filled($data['district'] ?? null) ? trim((string) $data['district']) : null,
-            'postal_code' => filled($data['postal_code'] ?? null) ? trim((string) $data['postal_code']) : null,
-            'latitude' => (float) $data['latitude'],
-            'longitude' => (float) $data['longitude'],
-        ];
     }
 
     private function userShippingLocation(User $user): ?array

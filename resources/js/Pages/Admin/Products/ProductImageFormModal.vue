@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal.vue';
 import AppButton from '@/Components/UI/AppButton.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
-import { GripVertical, Star, Trash2 } from '@lucide/vue';
+import { GripVertical, Trash2 } from '@lucide/vue';
 
 const props = defineProps({
     show: { type: Boolean, default: false },
@@ -254,7 +254,6 @@ onBeforeUnmount(revokePreviews);
                                 <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-muted">
                                     <span>Urutan {{ index + 1 }}</span>
                                     <span>{{ formatFileSize(preview.size) }}</span>
-                                    <Star v-if="index === 0" class="h-4 w-4 fill-yellow-400 text-yellow-500" />
                                 </div>
                             </div>
                             <div class="flex shrink-0 items-center gap-1">

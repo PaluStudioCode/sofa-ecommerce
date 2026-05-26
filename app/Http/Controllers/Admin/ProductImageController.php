@@ -157,6 +157,10 @@ class ProductImageController extends Controller
         $variantId = $productImage->product_variant_id;
         $wasPrimary = $productImage->is_primary;
 
+        Product::query()
+            ->where('primary_image_id', $productImage->id)
+            ->update(['primary_image_id' => null]);
+
         MediaUrl::deleteLocal($productImage->file_path);
         $productImage->delete();
 
@@ -169,32 +173,6 @@ class ProductImageController extends Controller
         }
 
         return back()->with('success', 'Gambar produk dihapus.');
-    }
-
-    public function primary(ProductImage $productImage): RedirectResponse
-    {
-        $images = ProductImage::query()
-            ->where('product_variant_id', $productImage->product_variant_id)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
-
-        DB::transaction(function () use ($images, $productImage) {
-            $orderedImageIds = $images
-                ->pluck('id')
-                ->reject(fn (int $imageId) => $imageId === $productImage->id)
-                ->prepend($productImage->id)
-                ->values();
-
-            foreach ($orderedImageIds as $index => $imageId) {
-                $images->firstWhere('id', $imageId)?->update([
-                    'sort_order' => $index,
-                    'is_primary' => $index === 0,
-                ]);
-            }
-        });
-
-        return back()->with('success', 'Gambar utama diperbarui.');
     }
 
     private function payload(ProductImage $image): array

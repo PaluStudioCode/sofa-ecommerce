@@ -7,10 +7,9 @@ import DataTable from '@/Components/UI/DataTable.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import FormInput from '@/Components/UI/FormInput.vue';
 import FormSelect from '@/Components/UI/FormSelect.vue';
-import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import { useConfirm } from '@/Composables/useFeedback';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Star, Trash2, Upload } from '@lucide/vue';
+import { Trash2, Upload } from '@lucide/vue';
 
 const props = defineProps({
     navigationGroups: { type: Array, default: () => [] },
@@ -29,7 +28,6 @@ const form = useForm({
     image: null,
     alt_text: '',
     sort_order: 0,
-    is_primary: false,
 });
 
 const columns = [
@@ -37,7 +35,6 @@ const columns = [
     { key: 'product_name', label: 'Produk' },
     { key: 'variant_name', label: 'Varian' },
     { key: 'sort_order', label: 'Urutan' },
-    { key: 'is_primary', label: 'Utama' },
 ];
 
 const variantOptions = computed(() => [
@@ -74,10 +71,6 @@ function submit() {
     });
 }
 
-function setPrimary(image) {
-    router.put(route('admin.product-images.primary', image.id));
-}
-
 async function destroyImage(image) {
     if (await confirm({
         title: 'Hapus gambar produk?',
@@ -106,15 +99,8 @@ async function destroyImage(image) {
             <template #cell-url="{ row }">
                 <img :src="row.url" :alt="row.alt_text || row.product_name" class="h-12 w-16 rounded-md object-cover" />
             </template>
-            <template #cell-is_primary="{ value }">
-                <StatusBadge :status="value ? 'aktif' : 'nonaktif'" :label="value ? 'Utama' : 'Reguler'" />
-            </template>
             <template #actions="{ row }">
                 <div class="flex justify-end gap-2">
-                    <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-neutral-border hover:bg-neutral-light" @click="setPrimary(row)">
-                        <Star class="h-4 w-4" />
-                        <span class="sr-only">Jadikan utama</span>
-                    </button>
                     <button type="button" class="inline-grid h-9 w-9 place-items-center rounded-md border border-red-200 text-danger hover:bg-red-50" @click="destroyImage(row)">
                         <Trash2 class="h-4 w-4" />
                         <span class="sr-only">Hapus</span>
@@ -143,11 +129,6 @@ async function destroyImage(image) {
                     <span class="text-sm font-medium text-neutral-text">File Gambar<span class="text-danger"> *</span></span>
                     <input id="image_file" type="file" accept="image/png,image/jpeg,image/webp" class="mt-1 block w-full rounded-md border border-neutral-border text-sm text-neutral-text file:mr-4 file:min-h-10 file:border-0 file:bg-neutral-light file:px-4 file:text-sm file:font-semibold" @input="form.image = $event.target.files[0]" />
                     <p v-if="form.errors.image" class="mt-1 text-sm text-danger">{{ form.errors.image }}</p>
-                </label>
-
-                <label class="mt-4 flex items-center gap-2 text-sm font-medium text-neutral-text">
-                    <input v-model="form.is_primary" type="checkbox" class="rounded border-neutral-border text-primary-hover focus:ring-primary" />
-                    Jadikan gambar utama
                 </label>
 
                 <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -88,21 +88,25 @@ function submitOrder() {
                     </template>
                 </EmptyState>
 
-                <div v-if="items.length > 0" class="grid gap-5 lg:grid-cols-[1fr_380px]">
+                <div v-if="items.length > 0" class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
                     <div class="grid gap-5">
                         <section class="rounded-md border border-neutral-border bg-white p-5">
                             <h2 class="text-lg font-semibold text-neutral-text">Item pesanan</h2>
-                            <div class="mt-4 grid gap-3">
-                                <article v-for="item in items" :key="item.id" class="grid gap-3 rounded-md border border-neutral-border p-3 sm:grid-cols-[88px_1fr_auto]">
-                                    <img :src="item.image_url || sofaFallback" :alt="item.product_name" class="aspect-square w-full rounded-md object-cover" />
-                                    <div>
-                                        <Link :href="route('products.show', item.product_slug)" class="font-semibold text-neutral-text hover:text-primary-hover">{{ item.product_name }}</Link>
+                            <div class="mt-4 max-h-[44vh] overflow-y-auto pr-1">
+                                <div class="grid gap-3">
+                                    <article v-for="item in items" :key="item.id" class="grid gap-3 rounded-md border border-neutral-border p-3 sm:grid-cols-[72px_minmax(0,1fr)_auto] sm:items-center">
+                                        <img :src="item.image_url || sofaFallback" :alt="item.product_name" class="aspect-square w-full rounded-md object-cover" />
+                                        <div class="min-w-0">
+                                            <Link :href="route('products.show', item.product_slug)" class="font-semibold text-neutral-text hover:text-primary-hover">{{ item.product_name }}</Link>
                                         <p class="mt-1 text-sm text-neutral-muted">{{ item.variant_name || 'Varian standar' }}</p>
-                                        <p class="mt-1 text-sm text-neutral-muted">{{ item.specification || item.category || '-' }}</p>
-                                        <p class="mt-2 text-sm text-neutral-muted">{{ item.quantity }} x {{ formatRupiah(item.unit_price) }}</p>
-                                    </div>
-                                    <p class="text-sm font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</p>
-                                </article>
+                                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-muted">
+                                                <span>{{ item.specification || item.category || '-' }}</span>
+                                                <span>{{ item.quantity }} x {{ formatRupiah(item.unit_price) }}</span>
+                                            </div>
+                                        </div>
+                                        <p class="text-sm font-semibold text-neutral-text sm:text-right">{{ formatRupiah(item.subtotal) }}</p>
+                                    </article>
+                                </div>
                             </div>
                         </section>
 
@@ -149,7 +153,7 @@ function submitOrder() {
                         </section>
                     </div>
 
-                    <aside class="h-fit rounded-md border border-neutral-border bg-white p-5">
+                    <aside class="h-fit rounded-md border border-neutral-border bg-white p-5 lg:sticky lg:top-24">
                         <h2 class="text-lg font-semibold text-neutral-text">Ringkasan pembayaran</h2>
 
                         <div class="mt-4">

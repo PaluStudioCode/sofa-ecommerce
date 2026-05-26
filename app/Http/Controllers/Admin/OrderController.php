@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Services\Orders\OrderStatusTransitionService;
+use App\Services\Payments\PaymentAttemptService;
+use App\Support\MediaUrl;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,8 +17,10 @@ use Inertia\Response;
 
 class OrderController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, PaymentAttemptService $payments): Response
     {
+        $payments->expireOverduePendingAttempts();
+
         $filters = $request->validate([
             'keyword' => ['nullable', 'string', 'max:100'],
             'order_status' => ['nullable', Rule::in(['', ...OrderStatusTransitionService::STATUSES])],
@@ -72,8 +76,10 @@ class OrderController extends Controller
         ]);
     }
 
-    public function show(Request $request, Order $order): Response
+    public function show(Request $request, Order $order, PaymentAttemptService $payments): Response
     {
+        $payments->expireOverduePendingAttempts($order);
+
         $order->load([
             'user:id,name,email,phone',
             'address',
@@ -81,7 +87,18 @@ class OrderController extends Controller
             'delivery',
             'voucherSnapshot',
             'shippingSnapshot',
-            'items.variant:id,sku,variant_name,stock,reserved_stock,status',
+            'items' => fn ($query) => $query
+                ->with([
+                    'variant' => fn ($variantQuery) => $variantQuery
+                        ->select('id', 'sku', 'variant_name', 'stock', 'reserved_stock', 'status')
+                        ->with(['images' => fn ($imageQuery) => $imageQuery
+                            ->select('id', 'product_variant_id', 'file_path', 'is_primary', 'sort_order')
+                            ->orderByDesc('is_primary')
+                            ->orderBy('sort_order')
+                            ->orderBy('id'),
+                        ]),
+                ])
+                ->orderBy('id'),
             'payments' => fn ($query) => $query->latest('attempt_number'),
         ]);
         $order->loadCount('items');
@@ -151,25 +168,41 @@ class OrderController extends Controller
                 'status' => $order->voucher?->status,
             ] : null,
             'store' => $shipping ? [
+                'id' => $shipping->shipping_setting_id,
                 'name' => $shipping->origin_name,
+                'origin_address' => $shipping->origin_address,
+                'origin_latitude' => $shipping->origin_latitude === null ? null : (float) $shipping->origin_latitude,
+                'origin_longitude' => $shipping->origin_longitude === null ? null : (float) $shipping->origin_longitude,
+                'shipping_cost_per_km' => $shipping->shipping_cost_per_km === null ? null : (float) $shipping->shipping_cost_per_km,
+                'distance_km' => $shipping->distance_km === null ? null : (float) $shipping->distance_km,
+                'billable_distance_km' => $shipping->billable_distance_km === null ? null : (float) $shipping->billable_distance_km,
+                'shipping_cost' => $shipping->shipping_cost === null ? null : (float) $shipping->shipping_cost,
+                'duration_seconds' => $shipping->duration_seconds,
+                'distance_provider' => $shipping->distance_provider,
+                'route_geometry' => $shipping->route_geometry ?? [],
             ] : null,
-            'items' => $order->items->map(fn (OrderItem $item) => [
-                'id' => $item->id,
-                'product_name' => $item->product_name,
-                'variant_name' => $item->variant_name,
-                'variant_sku' => $item->variant_sku,
-                'variant_size' => $item->variant_size,
-                'variant_material' => $item->variant_material,
-                'variant_color' => $item->variant_color,
-                'product_price' => (float) $item->product_price,
-                'quantity' => $item->quantity,
-                'subtotal' => (float) $item->subtotal,
-                'current_variant' => $item->variant ? [
-                    'stock' => $item->variant->stock,
-                    'reserved_stock' => $item->variant->reserved_stock,
-                    'status' => $item->variant->status,
-                ] : null,
-            ])->values(),
+            'items' => $order->items->map(function (OrderItem $item) {
+                $image = $item->variant?->images?->first();
+
+                return [
+                    'id' => $item->id,
+                    'product_name' => $item->product_name,
+                    'variant_name' => $item->variant_name,
+                    'variant_sku' => $item->variant_sku,
+                    'variant_size' => $item->variant_size,
+                    'variant_material' => $item->variant_material,
+                    'variant_color' => $item->variant_color,
+                    'image_url' => MediaUrl::fromPath($image?->file_path),
+                    'product_price' => (float) $item->product_price,
+                    'quantity' => $item->quantity,
+                    'subtotal' => (float) $item->subtotal,
+                    'current_variant' => $item->variant ? [
+                        'stock' => $item->variant->stock,
+                        'reserved_stock' => $item->variant->reserved_stock,
+                        'status' => $item->variant->status,
+                    ] : null,
+                ];
+            })->values(),
             'payments' => $order->payments->map(fn (Payment $payment) => $this->paymentPayload($payment, true))->values(),
             'shipment' => $this->shipmentPayload($order),
             'timeline' => $this->timeline($order),
@@ -222,9 +255,15 @@ class OrderController extends Controller
 
     private function timeline(Order $order): array
     {
+        $paymentStepStatus = match (true) {
+            $order->payment_status === 'success' => 'completed',
+            in_array($order->payment_status, ['failed', 'expired', 'cancelled'], true) => 'blocked',
+            default => 'current',
+        };
+
         return [
             ['label' => 'Pesanan dibuat', 'description' => 'Order diterima sistem.', 'state' => 'completed'],
-            ['label' => 'Pembayaran berhasil', 'description' => $order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran Midtrans.', 'state' => $order->payment_status === 'success' ? 'completed' : 'current'],
+            ['label' => 'Pembayaran berhasil', 'description' => $order->payment_status === 'success' ? 'Pembayaran valid diterima.' : 'Menunggu pembayaran Midtrans.', 'state' => $paymentStepStatus],
             ['label' => 'Pesanan diproses', 'description' => 'Tim toko menyiapkan sofa.', 'state' => in_array($order->order_status, ['diproses', 'dalam_perjalanan', 'barang_diterima'], true) ? 'completed' : 'pending'],
             ['label' => 'Dalam perjalanan', 'description' => 'Pengiriman internal toko berjalan.', 'state' => in_array($order->order_status, ['dalam_perjalanan', 'barang_diterima'], true) ? 'completed' : 'pending'],
             ['label' => 'Barang diterima', 'description' => 'Pesanan diterima pelanggan.', 'state' => $order->order_status === 'barang_diterima' ? 'completed' : 'pending'],

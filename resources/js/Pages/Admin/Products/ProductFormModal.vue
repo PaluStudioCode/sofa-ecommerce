@@ -20,7 +20,7 @@ const form = useForm({
     name: '',
     slug: '',
     description: '',
-    status: 'aktif',
+    status: 'nonaktif',
     is_featured: false,
 });
 
@@ -32,7 +32,7 @@ function fillForm() {
         name: props.product?.name || '',
         slug: props.product?.slug || '',
         description: props.product?.description || '',
-        status: props.product?.status || 'aktif',
+        status: props.product?.status || 'nonaktif',
         is_featured: props.product?.is_featured || false,
     });
     form.reset();

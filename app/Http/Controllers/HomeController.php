@@ -26,8 +26,8 @@ class HomeController extends Controller
         $sections = collect();
 
         $featuredProducts = Product::query()
-            ->with(['category:id,name', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
-            ->where('status', 'aktif')
+            ->with(['category:id,name', 'primaryImage:id,product_variant_id,file_path,alt_text', 'variants:id,product_id,price,status,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
+            ->visibleForCustomers()
             ->where('is_featured', true)
             ->limit(6)
             ->get()
@@ -37,12 +37,9 @@ class HomeController extends Controller
             ->where('status', 'aktif')
             ->where('start_at', '<=', now())
             ->where('end_at', '>=', now())
-            ->where(function ($query) {
-                $query->whereNull('quota')
-                    ->orWhereRaw('(select count(*) from order_voucher_snapshots where order_voucher_snapshots.voucher_id = vouchers.id) < vouchers.quota');
-            })
             ->orderBy('end_at')
-            ->first();
+            ->get()
+            ->first(fn (Voucher $voucher) => $voucher->quota === null || $this->paidVoucherUsageCount($voucher) < $voucher->quota);
 
         return Inertia::render('Home', [
             'sections' => $sections,
@@ -78,6 +75,14 @@ class HomeController extends Controller
 
     private function primaryImage(Product $product): ?object
     {
+        $selectedImage = $product->relationLoaded('primaryImage')
+            ? $product->primaryImage
+            : $product->primaryImage()->first();
+
+        if ($selectedImage) {
+            return $selectedImage;
+        }
+
         return $product->variants
             ->flatMap(fn ($variant) => $variant->images)
             ->sortBy([
@@ -86,5 +91,12 @@ class HomeController extends Controller
                 ['id', 'asc'],
             ])
             ->first();
+    }
+
+    private function paidVoucherUsageCount(Voucher $voucher): int
+    {
+        return (int) $voucher->voucherSnapshots()
+            ->whereHas('order.payments', fn ($query) => $query->where('status', 'success'))
+            ->count();
     }
 }

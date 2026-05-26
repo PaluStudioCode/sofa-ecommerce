@@ -29,7 +29,8 @@ class VoucherController extends Controller
         ]);
 
         $vouchers = Voucher::query()
-            ->withCount('orders')
+            ->withCount(['voucherSnapshots as paid_usages_count' => fn ($query) => $query
+                ->whereHas('order.payments', fn ($payment) => $payment->where('status', 'success'))])
             ->when($filters['keyword'] ?? null, function ($query, string $keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('code', 'like', "%{$keyword}%")
@@ -85,7 +86,7 @@ class VoucherController extends Controller
     public function update(VoucherRequest $request, Voucher $voucher): RedirectResponse
     {
         $data = $this->formData($request);
-        $data = $this->statuses->normalize($data, $voucher->orders()->count());
+        $data = $this->statuses->normalize($data, $this->paidUsageCount($voucher));
 
         $voucher->update($data);
 
@@ -94,7 +95,7 @@ class VoucherController extends Controller
 
     public function destroy(Voucher $voucher): RedirectResponse
     {
-        if ($voucher->orders()->exists()) {
+        if ($voucher->voucherSnapshots()->exists()) {
             $voucher->update(['status' => 'nonaktif']);
 
             return back()->with('success', 'Voucher sudah pernah digunakan, status diubah menjadi nonaktif.');
@@ -117,7 +118,7 @@ class VoucherController extends Controller
 
     private function payload(Voucher $voucher): array
     {
-        $usedCount = $voucher->orders_count ?? $voucher->orders()->count();
+        $usedCount = $voucher->paid_usages_count ?? $this->paidUsageCount($voucher);
 
         return [
             'id' => $voucher->id,
@@ -150,6 +151,13 @@ class VoucherController extends Controller
         return $withAll
             ? $options->prepend(['value' => '', 'label' => 'Semua status'])->values()->all()
             : $options->values()->all();
+    }
+
+    private function paidUsageCount(Voucher $voucher): int
+    {
+        return (int) $voucher->voucherSnapshots()
+            ->whereHas('order.payments', fn ($query) => $query->where('status', 'success'))
+            ->count();
     }
 
     private function discountTypeOptions(bool $withAll): array

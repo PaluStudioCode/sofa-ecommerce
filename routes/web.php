@@ -53,7 +53,6 @@ Route::middleware(['auth', 'verified', 'role:customer'])->group(function () {
     Route::post('/address', [CustomerAddressController::class, 'update'])->name('address.update');
 
     Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
-    Route::post('/checkout/location', [CheckoutController::class, 'resolveLocation'])->name('checkout.location');
     Route::post('/checkout/quote', [CheckoutController::class, 'quoteRequest'])->name('checkout.quote');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
     Route::get('/orders', [CustomerOrderController::class, 'index'])->name('orders.index');
@@ -67,6 +66,9 @@ Route::middleware(['auth', 'verified'])
     ->prefix('dashboard')
     ->name('admin.')
     ->group(function () {
+        Route::put('products/{product}/thumbnail', [AdminProductController::class, 'thumbnail'])
+            ->middleware('permission:manage_products')
+            ->name('products.thumbnail');
         Route::resource('products', AdminProductController::class)
             ->middleware('permission:manage_products');
         Route::resource('categories', CategoryController::class)
@@ -75,9 +77,6 @@ Route::middleware(['auth', 'verified'])
         Route::resource('variants', ProductVariantController::class)
             ->only(['index', 'store', 'update', 'destroy'])
             ->middleware('permission:manage_product_variants');
-        Route::put('product-images/{product_image}/primary', [ProductImageController::class, 'primary'])
-            ->middleware('permission:manage_products')
-            ->name('product-images.primary');
         Route::put('product-images/reorder', [ProductImageController::class, 'reorder'])
             ->middleware('permission:manage_products')
             ->name('product-images.reorder');

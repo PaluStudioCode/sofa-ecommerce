@@ -58,6 +58,8 @@ class VoucherStatusService
 
     private function usedCount(Voucher $voucher): int
     {
-        return (int) ($voucher->orders_count ?? $voucher->orders()->count());
+        return (int) $voucher->voucherSnapshots()
+            ->whereHas('order.payments', fn ($query) => $query->where('status', 'success'))
+            ->count();
     }
 }

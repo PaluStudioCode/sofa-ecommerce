@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\CategoryRequest;
 use App\Models\Category;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,13 +53,21 @@ class CategoryController extends Controller
         $data = $request->validated();
         $data['is_active'] = $request->boolean('is_active');
 
-        $category->update($data);
+        DB::transaction(function () use ($category, $data) {
+            $category->update($data);
+
+            if (! $category->is_active) {
+                $category->products()->update(['status' => 'nonaktif']);
+            }
+        });
 
         return back()->with('success', 'Kategori diperbarui.');
     }
 
     public function destroy(Category $category): RedirectResponse
     {
+        $category->products()->update(['status' => 'nonaktif']);
+
         $usedInOrders = $category->products()
             ->whereHas('orderItems')
             ->exists();

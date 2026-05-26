@@ -11,6 +11,8 @@ defineProps({
     orders: { type: Object, required: true },
 });
 
+const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
+
 function formatRupiah(value) {
     return new Intl.NumberFormat('id-ID', {
         style: 'currency',
@@ -50,32 +52,45 @@ function formatDate(value) {
                 </EmptyState>
 
                 <div v-else class="grid gap-4">
-                    <article v-for="order in orders.data" :key="order.id" class="rounded-md border border-neutral-border bg-white p-5">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <PackageCheck class="h-5 w-5 text-primary-hover" />
-                                    <Link :href="route('orders.show', order.id)" class="font-semibold text-neutral-text hover:text-primary-hover">
-                                        {{ order.order_number }}
+                    <div class="max-h-[68vh] overflow-y-auto pr-1">
+                        <div class="grid gap-3">
+                            <article v-for="order in orders.data" :key="order.id" class="rounded-md border border-neutral-border bg-white p-4">
+                                <div class="grid gap-3 sm:grid-cols-[76px_minmax(0,1fr)] lg:grid-cols-[76px_minmax(0,1fr)_auto] lg:items-center">
+                                    <Link :href="route('orders.show', order.id)" class="block overflow-hidden rounded-md border border-neutral-border bg-neutral-light">
+                                        <img :src="order.image_url || sofaFallback" :alt="order.preview_product_name || order.order_number" class="aspect-square w-full object-cover" />
                                     </Link>
-                                </div>
-                                <p class="mt-1 text-sm text-neutral-muted">{{ formatDate(order.created_at) }} - {{ order.items_count }} item</p>
-                                <p class="mt-2 text-sm text-neutral-muted">{{ order.shipment_summary }}</p>
-                                <p class="mt-3 text-xl font-bold text-neutral-text">{{ formatRupiah(order.total_amount) }}</p>
-                            </div>
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <PackageCheck class="h-5 w-5 shrink-0 text-primary-hover" />
+                                            <Link :href="route('orders.show', order.id)" class="font-semibold text-neutral-text hover:text-primary-hover">
+                                                {{ order.order_number }}
+                                            </Link>
+                                            <span class="text-sm font-semibold text-neutral-text">{{ formatRupiah(order.total_amount) }}</span>
+                                        </div>
+                                        <p v-if="order.preview_product_name" class="mt-1 truncate text-sm font-medium text-neutral-text">
+                                            {{ order.preview_product_name }}<span v-if="order.preview_variant_name" class="font-normal text-neutral-muted"> - {{ order.preview_variant_name }}</span>
+                                        </p>
+                                        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-muted">
+                                            <span>{{ formatDate(order.created_at) }}</span>
+                                            <span>{{ order.items_count }} item</span>
+                                            <span>{{ order.shipment_summary }}</span>
+                                        </div>
+                                    </div>
 
-                            <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center lg:min-w-[520px]">
-                                <div class="flex flex-wrap gap-2">
-                                    <StatusBadge :status="order.order_status" />
-                                    <StatusBadge :status="order.payment_status" />
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
+                                        <div class="flex flex-wrap gap-2">
+                                            <StatusBadge :status="order.order_status" />
+                                            <StatusBadge :status="order.payment_status" />
+                                        </div>
+                                        <AppButton :href="route('orders.show', order.id)" variant="secondary" size="sm">
+                                            <Eye class="h-4 w-4" />
+                                            Detail
+                                        </AppButton>
+                                    </div>
                                 </div>
-                                <AppButton :href="route('orders.show', order.id)" variant="secondary">
-                                    <Eye class="h-4 w-4" />
-                                    Detail
-                                </AppButton>
-                            </div>
+                            </article>
                         </div>
-                    </article>
+                    </div>
 
                     <Pagination :links="orders.links" />
                 </div>

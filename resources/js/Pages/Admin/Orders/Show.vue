@@ -20,6 +20,7 @@ const mapModalOpen = ref(false);
 const shipmentModalOpen = ref(false);
 const hasShipment = computed(() => Boolean(props.order.shipment));
 const hasShippingCoordinates = computed(() => Number.isFinite(Number(props.order.shipping_latitude)) && Number.isFinite(Number(props.order.shipping_longitude)));
+const sofaFallback = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80';
 
 const statusLabels = {
     diproses: 'Diproses',
@@ -70,6 +71,12 @@ function formatDateOnly(value) {
     return new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'medium',
     }).format(new Date(value));
+}
+
+function formatKilometer(value) {
+    return new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 2,
+    }).format(value || 0);
 }
 
 function dateInputValue(value) {
@@ -161,32 +168,38 @@ watch(() => shipmentForm.order_status, (status) => {
 
         <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div class="grid min-w-0 content-start gap-5">
-                <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
-                    <div class="mb-4 flex items-center gap-2">
-                        <ReceiptText class="h-5 w-5 text-info" />
-                        <h3 class="font-semibold text-neutral-text">Item Pesanan</h3>
+                <section class="h-fit rounded-md border border-neutral-border bg-white p-4">
+                    <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex items-center gap-2">
+                            <ReceiptText class="h-5 w-5 text-info" />
+                            <h3 class="font-semibold text-neutral-text">Item Pesanan</h3>
+                        </div>
+                        <p class="text-sm text-neutral-muted">{{ order.items.length }} item</p>
                     </div>
 
-                    <div class="grid gap-3">
-                        <article v-for="item in order.items" :key="item.id" class="rounded-md border border-neutral-border p-4">
-                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div class="min-w-0">
-                                    <p class="font-semibold text-neutral-text">{{ item.product_name }}</p>
-                                    <p class="mt-1 text-sm text-neutral-muted">
-                                        {{ [item.variant_name, item.variant_sku, item.variant_size, item.variant_material, item.variant_color].filter(Boolean).join(' / ') || 'Tanpa varian' }}
-                                    </p>
-                                    <div v-if="item.current_variant" class="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-muted">
-                                        <span>Stok {{ item.current_variant.stock }}</span>
-                                        <span>Reserved {{ item.current_variant.reserved_stock }}</span>
-                                        <StatusBadge :status="item.current_variant.status" />
+                    <div class="max-h-[38vh] overflow-y-auto pr-1">
+                        <div class="grid gap-2">
+                            <article v-for="item in order.items" :key="item.id" class="rounded-md border border-neutral-border p-2.5">
+                                <div class="grid grid-cols-[56px_minmax(0,1fr)] gap-2.5 md:grid-cols-[56px_minmax(0,1fr)_auto] md:items-center">
+                                    <img :src="item.image_url || sofaFallback" :alt="item.product_name" class="h-14 w-14 rounded-md object-cover" />
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-neutral-text">{{ item.product_name }}</p>
+                                        <p class="mt-0.5 truncate text-xs text-neutral-muted">{{ item.variant_name || 'Varian standar' }}</p>
+                                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-muted">
+                                            <span v-if="item.variant_sku">{{ item.variant_sku }}</span>
+                                            <span>{{ [item.variant_size, item.variant_material, item.variant_color].filter(Boolean).join(' / ') || 'Tanpa detail varian' }}</span>
+                                            <span v-if="item.current_variant">Stok {{ item.current_variant.stock }}</span>
+                                            <span v-if="item.current_variant">Reserved {{ item.current_variant.reserved_stock }}</span>
+                                            <StatusBadge v-if="item.current_variant" :status="item.current_variant.status" />
+                                        </div>
+                                    </div>
+                                    <div class="col-span-2 shrink-0 text-left md:col-span-1 md:text-right">
+                                        <p class="text-xs text-neutral-muted">{{ item.quantity }} x {{ formatRupiah(item.product_price) }}</p>
+                                        <p class="mt-0.5 text-sm font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</p>
                                     </div>
                                 </div>
-                                <div class="shrink-0 text-left md:text-right">
-                                    <p class="text-sm text-neutral-muted">{{ item.quantity }} x {{ formatRupiah(item.product_price) }}</p>
-                                    <p class="mt-1 font-semibold text-neutral-text">{{ formatRupiah(item.subtotal) }}</p>
-                                </div>
-                            </div>
-                        </article>
+                            </article>
+                        </div>
                     </div>
                 </section>
 
@@ -196,39 +209,41 @@ watch(() => shipmentForm.order_status, (status) => {
                         <h3 class="font-semibold text-neutral-text">Pembayaran</h3>
                     </div>
 
-                    <div v-if="order.payments.length" class="grid gap-3">
-                        <article v-for="payment in order.payments" :key="payment.id" class="rounded-md border border-neutral-border p-4">
-                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div class="min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="font-semibold text-neutral-text">Attempt #{{ payment.attempt_number }}</p>
-                                        <StatusBadge :status="payment.status" />
+                    <div v-if="order.payments.length" class="max-h-[42vh] overflow-y-auto pr-1">
+                        <div class="grid gap-3">
+                            <article v-for="payment in order.payments" :key="payment.id" class="rounded-md border border-neutral-border p-3">
+                                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="font-semibold text-neutral-text">Attempt #{{ payment.attempt_number }}</p>
+                                            <StatusBadge :status="payment.status" />
+                                        </div>
+                                        <dl class="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                                            <div>
+                                                <dt class="text-neutral-muted">Midtrans order</dt>
+                                                <dd class="break-all font-semibold text-neutral-text">{{ payment.midtrans_order_id }}</dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-neutral-muted">Transaction ID</dt>
+                                                <dd class="break-all font-semibold text-neutral-text">{{ payment.midtrans_transaction_id || '-' }}</dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-neutral-muted">Metode</dt>
+                                                <dd class="font-semibold text-neutral-text">{{ payment.payment_type || '-' }}</dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-neutral-muted">Dibayar</dt>
+                                                <dd class="font-semibold text-neutral-text">{{ formatDate(payment.paid_at) }}</dd>
+                                            </div>
+                                        </dl>
                                     </div>
-                                    <dl class="mt-3 grid gap-2 text-sm md:grid-cols-2">
-                                        <div>
-                                            <dt class="text-neutral-muted">Midtrans order</dt>
-                                            <dd class="break-all font-semibold text-neutral-text">{{ payment.midtrans_order_id }}</dd>
-                                        </div>
-                                        <div>
-                                            <dt class="text-neutral-muted">Transaction ID</dt>
-                                            <dd class="break-all font-semibold text-neutral-text">{{ payment.midtrans_transaction_id || '-' }}</dd>
-                                        </div>
-                                        <div>
-                                            <dt class="text-neutral-muted">Metode</dt>
-                                            <dd class="font-semibold text-neutral-text">{{ payment.payment_type || '-' }}</dd>
-                                        </div>
-                                        <div>
-                                            <dt class="text-neutral-muted">Dibayar</dt>
-                                            <dd class="font-semibold text-neutral-text">{{ formatDate(payment.paid_at) }}</dd>
-                                        </div>
-                                    </dl>
+                                    <div class="shrink-0 text-left md:text-right">
+                                        <p class="text-sm text-neutral-muted">Gross</p>
+                                        <p class="font-semibold text-neutral-text">{{ formatRupiah(payment.gross_amount) }}</p>
+                                    </div>
                                 </div>
-                                <div class="shrink-0 text-left md:text-right">
-                                    <p class="text-sm text-neutral-muted">Gross</p>
-                                    <p class="font-semibold text-neutral-text">{{ formatRupiah(payment.gross_amount) }}</p>
-                                </div>
-                            </div>
-                        </article>
+                            </article>
+                        </div>
                     </div>
                     <p v-else class="text-sm text-neutral-muted">Belum ada payment attempt.</p>
                 </section>
@@ -269,12 +284,30 @@ watch(() => shipmentForm.order_status, (status) => {
                         <div v-if="order.store">
                             <dt class="text-neutral-muted">Titik asal</dt>
                             <dd class="font-semibold text-neutral-text">{{ order.store.name }}</dd>
+                            <dd v-if="order.store.origin_address" class="mt-1 text-neutral-muted">{{ order.store.origin_address }}</dd>
+                        </div>
+                        <div v-if="order.store?.distance_km">
+                            <dt class="text-neutral-muted">Detail ongkir</dt>
+                            <dd class="mt-1 grid gap-2 rounded-md bg-neutral-light p-3 text-neutral-text">
+                                <span class="flex justify-between gap-3">
+                                    <span>Jarak jalan</span>
+                                    <span class="font-semibold">{{ formatKilometer(order.store.distance_km) }} km</span>
+                                </span>
+                                <span class="flex justify-between gap-3">
+                                    <span>Jarak ditagihkan</span>
+                                    <span class="font-semibold">{{ formatKilometer(order.store.billable_distance_km) }} km</span>
+                                </span>
+                                <span class="flex justify-between gap-3">
+                                    <span>Tarif per KM</span>
+                                    <span class="font-semibold">{{ formatRupiah(order.store.shipping_cost_per_km) }}</span>
+                                </span>
+                            </dd>
                         </div>
                     </dl>
                 </section>
             </div>
 
-            <aside class="grid h-fit content-start gap-5">
+            <aside class="grid h-fit content-start gap-5 xl:sticky xl:top-24">
                 <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
                     <h3 class="font-semibold text-neutral-text">Ringkasan Total</h3>
                     <div class="mt-4 grid gap-3 text-sm">
@@ -288,13 +321,15 @@ watch(() => shipmentForm.order_status, (status) => {
 
                 <section class="h-fit rounded-md border border-neutral-border bg-white p-5">
                     <h3 class="font-semibold text-neutral-text">Timeline</h3>
-                    <ol class="mt-4 grid gap-4">
-                        <li v-for="step in order.timeline" :key="step.label" class="grid grid-cols-[28px_1fr] gap-3">
+                    <ol class="mt-4 grid">
+                        <li v-for="(step, index) in order.timeline" :key="step.label" class="relative grid grid-cols-[28px_1fr] gap-3 pb-4 last:pb-0">
+                            <span v-if="index < order.timeline.length - 1" class="absolute bottom-0 left-[13px] top-8 w-px bg-neutral-border" />
                             <span
-                                class="mt-1 grid h-7 w-7 place-items-center rounded-full border text-xs font-bold"
+                                class="relative z-10 mt-1 grid h-7 w-7 place-items-center rounded-full border text-xs font-bold"
                                 :class="{
                                     'border-green-200 bg-green-50 text-success': step.state === 'completed',
                                     'border-yellow-200 bg-primary-soft text-neutral-text': step.state === 'current',
+                                    'border-red-200 bg-red-50 text-danger': step.state === 'blocked',
                                     'border-neutral-border bg-neutral-light text-neutral-muted': step.state === 'pending',
                                 }"
                             >

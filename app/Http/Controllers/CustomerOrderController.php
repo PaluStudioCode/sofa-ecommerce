@@ -5,16 +5,32 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\Midtrans\MidtransPaymentGateway;
+use App\Services\Payments\PaymentAttemptService;
+use App\Support\MediaUrl;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CustomerOrderController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, PaymentAttemptService $payments): Response
     {
+        $payments->expireOverduePendingAttempts();
+
         $orders = Order::query()
-            ->with(['items:id,order_id,product_name,variant_name,quantity,subtotal', 'total', 'delivery', 'payments' => fn ($query) => $query->latest('attempt_number')])
+            ->with([
+                'items' => fn ($query) => $query
+                    ->select('id', 'order_id', 'product_variant_id', 'product_name', 'variant_name', 'quantity', 'subtotal')
+                    ->with(['variant.images' => fn ($imageQuery) => $imageQuery
+                        ->select('id', 'product_variant_id', 'file_path', 'is_primary', 'sort_order')
+                        ->orderByDesc('is_primary')
+                        ->orderBy('sort_order')
+                        ->orderBy('id')])
+                    ->orderBy('id'),
+                'total',
+                'delivery',
+                'payments' => fn ($query) => $query->latest('attempt_number'),
+            ])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->paginate(8)
@@ -25,9 +41,11 @@ class CustomerOrderController extends Controller
         ]);
     }
 
-    public function show(Request $request, Order $order, MidtransPaymentGateway $midtrans): Response
+    public function show(Request $request, Order $order, MidtransPaymentGateway $midtrans, PaymentAttemptService $payments): Response
     {
         abort_unless($order->user_id === $request->user()->id, 404);
+
+        $payments->expireOverduePendingAttempts($order);
 
         $order->load([
             'user:id,name,email,phone',
@@ -36,7 +54,14 @@ class CustomerOrderController extends Controller
             'delivery',
             'voucherSnapshot',
             'shippingSnapshot',
-            'items:id,order_id,product_name,variant_name,variant_sku,variant_size,variant_material,variant_color,product_price,quantity,subtotal',
+            'items' => fn ($query) => $query
+                ->select('id', 'order_id', 'product_variant_id', 'product_name', 'variant_name', 'variant_sku', 'variant_size', 'variant_material', 'variant_color', 'product_price', 'quantity', 'subtotal')
+                ->with(['variant.images' => fn ($imageQuery) => $imageQuery
+                    ->select('id', 'product_variant_id', 'file_path', 'is_primary', 'sort_order')
+                    ->orderByDesc('is_primary')
+                    ->orderBy('sort_order')
+                    ->orderBy('id')])
+                ->orderBy('id'),
             'payments' => fn ($query) => $query->latest('attempt_number'),
         ]);
 
@@ -49,11 +74,16 @@ class CustomerOrderController extends Controller
     private function summaryPayload(Order $order): array
     {
         $latestPayment = $order->payments->first();
+        $previewItem = $order->items->first();
+        $previewImage = $previewItem?->variant?->images?->first();
 
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
             'created_at' => $order->created_at?->toIso8601String(),
+            'preview_product_name' => $previewItem?->product_name,
+            'preview_variant_name' => $previewItem?->variant_name,
+            'image_url' => MediaUrl::fromPath($previewImage?->file_path),
             'total_amount' => (float) $order->total_amount,
             'order_status' => $order->order_status,
             'payment_status' => $order->payment_status,
@@ -87,10 +117,22 @@ class CustomerOrderController extends Controller
             'shipping_city' => $address?->city,
             'shipping_district' => $address?->district,
             'shipping_postal_code' => $address?->postal_code,
+            'shipping_latitude' => $address?->latitude === null ? null : (float) $address->latitude,
+            'shipping_longitude' => $address?->longitude === null ? null : (float) $address->longitude,
             'shipping_note' => collect([$address?->detail, $order->customer_note])->filter()->join("\n\n") ?: null,
             'store' => $shipping ? [
                 'id' => $shipping->shipping_setting_id,
                 'name' => $shipping->origin_name,
+                'origin_address' => $shipping->origin_address,
+                'origin_latitude' => $shipping->origin_latitude === null ? null : (float) $shipping->origin_latitude,
+                'origin_longitude' => $shipping->origin_longitude === null ? null : (float) $shipping->origin_longitude,
+                'shipping_cost_per_km' => $shipping->shipping_cost_per_km === null ? null : (float) $shipping->shipping_cost_per_km,
+                'distance_km' => $shipping->distance_km === null ? null : (float) $shipping->distance_km,
+                'billable_distance_km' => $shipping->billable_distance_km === null ? null : (float) $shipping->billable_distance_km,
+                'shipping_cost' => $shipping->shipping_cost === null ? null : (float) $shipping->shipping_cost,
+                'duration_seconds' => $shipping->duration_seconds,
+                'distance_provider' => $shipping->distance_provider,
+                'route_geometry' => $shipping->route_geometry ?? [],
             ] : null,
             'subtotal_amount' => (float) $order->subtotal_amount,
             'discount_amount' => (float) $order->discount_amount,
@@ -104,17 +146,22 @@ class CustomerOrderController extends Controller
                 'name' => $voucher->voucher_name,
                 'status' => $order->voucher?->status,
             ] : null,
-            'items' => $order->items->map(fn ($item) => [
-                'product_name' => $item->product_name,
-                'variant_name' => $item->variant_name,
-                'variant_sku' => $item->variant_sku,
-                'variant_size' => $item->variant_size,
-                'variant_material' => $item->variant_material,
-                'variant_color' => $item->variant_color,
-                'product_price' => (float) $item->product_price,
-                'quantity' => $item->quantity,
-                'subtotal' => (float) $item->subtotal,
-            ])->values(),
+            'items' => $order->items->map(function ($item) {
+                $image = $item->variant?->images?->first();
+
+                return [
+                    'product_name' => $item->product_name,
+                    'variant_name' => $item->variant_name,
+                    'variant_sku' => $item->variant_sku,
+                    'variant_size' => $item->variant_size,
+                    'variant_material' => $item->variant_material,
+                    'variant_color' => $item->variant_color,
+                    'image_url' => MediaUrl::fromPath($image?->file_path),
+                    'product_price' => (float) $item->product_price,
+                    'quantity' => $item->quantity,
+                    'subtotal' => (float) $item->subtotal,
+                ];
+            })->values(),
             'payment' => $latestPayment ? $this->paymentPayload($latestPayment) : null,
             'payments' => $order->payments->map(fn (Payment $payment) => $this->paymentPayload($payment))->values(),
             'shipment' => $this->shipmentPayload($order),

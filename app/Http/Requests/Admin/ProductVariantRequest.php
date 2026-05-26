@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\ProductVariant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -27,5 +28,20 @@ class ProductVariantRequest extends FormRequest
             'stock' => ['required', 'integer', 'min:0'],
             'status' => ['required', Rule::in(['aktif', 'nonaktif', 'stok_habis'])],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $variant = $this->route('variant');
+
+            if (! $variant instanceof ProductVariant || ! $this->filled('stock')) {
+                return;
+            }
+
+            if ((int) $this->input('stock') < $variant->reserved_stock) {
+                $validator->errors()->add('stock', 'Stok fisik tidak boleh lebih kecil dari reserved stock saat ini.');
+            }
+        });
     }
 }

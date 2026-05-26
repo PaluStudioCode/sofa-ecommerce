@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Support\MediaUrl;
 use App\Support\Navigation\DashboardNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,7 +26,7 @@ class ProductController extends Controller
         ]);
 
         $products = Product::query()
-            ->with(['category:id,name', 'variants:id,product_id,status,price,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
+            ->with(['category:id,name', 'primaryImage:id,product_variant_id,file_path,alt_text', 'variants:id,product_id,status,price,stock,reserved_stock', 'variants.images:id,product_variant_id,file_path,is_primary,sort_order'])
             ->withCount(['variants', 'orderItems'])
             ->when($filters['keyword'] ?? null, fn ($query, $keyword) => $query->where('name', 'like', "%{$keyword}%"))
             ->when($filters['category'] ?? null, fn ($query, $category) => $query->where('category_id', $category))
@@ -61,6 +63,12 @@ class ProductController extends Controller
         $data = $request->validated();
         $data['is_featured'] = $request->boolean('is_featured');
 
+        if (($data['status'] ?? null) === 'aktif') {
+            throw ValidationException::withMessages([
+                'status' => 'Produk baru dibuat sebagai nonaktif dulu. Tambahkan varian aktif, stok, gambar, dan thumbnail sebelum dipublish.',
+            ]);
+        }
+
         $product = Product::create($data);
 
         return redirect()->route('admin.products.index')->with('success', 'Produk disimpan.');
@@ -70,6 +78,7 @@ class ProductController extends Controller
     {
         $product->load([
             'category:id,name',
+            'primaryImage:id,product_variant_id,file_path,alt_text',
             'variants' => fn ($query) => $query
                 ->with(['images' => fn ($imageQuery) => $imageQuery->with('variant:id,product_id,variant_name,sku')->orderBy('sort_order')->orderBy('id')])
                 ->withCount('orderItems')
@@ -112,6 +121,7 @@ class ProductController extends Controller
                     'url' => MediaUrl::fromPath($image->file_path),
                     'alt_text' => $image->alt_text,
                     'is_primary' => $image->is_primary,
+                    'is_product_thumbnail' => $product->primary_image_id === $image->id,
                     'sort_order' => $image->sort_order,
                 ]),
             ],
@@ -135,9 +145,44 @@ class ProductController extends Controller
         $data = $request->validated();
         $data['is_featured'] = $request->boolean('is_featured');
 
-        $product->update($data);
+        $product->fill($data);
+
+        if ($product->status === 'aktif' && ! $product->isPublishReady()) {
+            throw ValidationException::withMessages([
+                'status' => 'Produk belum siap tampil: '.implode(' ', $product->publishBlockers()),
+            ]);
+        }
+
+        $product->save();
 
         return back()->with('success', 'Produk diperbarui.');
+    }
+
+    public function thumbnail(Request $request, Product $product): RedirectResponse
+    {
+        $data = $request->validate([
+            'image_id' => ['required', 'integer', 'exists:product_images,id'],
+        ], [], [
+            'image_id' => 'thumbnail produk',
+        ]);
+
+        $image = ProductImage::query()
+            ->whereKey($data['image_id'])
+            ->whereHas('variant', fn ($query) => $query
+                ->where('product_id', $product->id)
+                ->where('status', 'aktif')
+                ->whereColumn('stock', '>', 'reserved_stock'))
+            ->first();
+
+        if (! $image) {
+            throw ValidationException::withMessages([
+                'image_id' => 'Thumbnail harus berasal dari varian aktif produk ini yang stoknya tersedia.',
+            ]);
+        }
+
+        $product->update(['primary_image_id' => $image->id]);
+
+        return back()->with('success', 'Thumbnail produk diperbarui.');
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -164,6 +209,9 @@ class ProductController extends Controller
             'category' => $product->category?->name,
             'status' => $product->status,
             'is_featured' => $product->is_featured,
+            'primary_image_id' => $product->primary_image_id,
+            'is_publish_ready' => $product->isPublishReady(),
+            'publish_blockers' => $product->publishBlockers(),
             'image_url' => MediaUrl::fromPath($this->primaryImage($product)?->file_path),
             'variants_count' => $product->variants_count ?? $product->variants->count(),
             'order_items_count' => $product->order_items_count ?? 0,
@@ -175,6 +223,14 @@ class ProductController extends Controller
 
     private function primaryImage(Product $product): ?object
     {
+        $selectedImage = $product->relationLoaded('primaryImage')
+            ? $product->primaryImage
+            : $product->primaryImage()->first();
+
+        if ($selectedImage) {
+            return $selectedImage;
+        }
+
         return $product->variants
             ->flatMap(fn ($variant) => $variant->images)
             ->sortBy([
