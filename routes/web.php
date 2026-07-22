@@ -57,6 +57,7 @@ Route::middleware(['auth', 'verified', 'role:customer'])->group(function () {
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
     Route::get('/orders', [CustomerOrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [CustomerOrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}/invoice', [CustomerOrderController::class, 'invoice'])->name('orders.invoice');
     Route::post('/orders/{order}/payments', [PaymentAttemptController::class, 'store'])->name('payments.store');
 });
 
@@ -98,6 +99,9 @@ Route::middleware(['auth', 'verified'])
         Route::resource('vouchers', VoucherController::class)
             ->except(['show'])
             ->middleware('permission:manage_vouchers');
+        Route::get('orders/export', [AdminOrderController::class, 'export'])
+            ->middleware('permission:manage_orders')
+            ->name('orders.export');
         Route::resource('orders', AdminOrderController::class)
             ->only(['index', 'show'])
             ->middleware('permission:manage_orders');

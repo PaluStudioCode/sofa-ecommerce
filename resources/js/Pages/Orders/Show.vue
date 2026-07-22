@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, MapPin, PackageCheck, Truck, X } from '@lucide/vue';
+import { ArrowLeft, CreditCard, MapPin, PackageCheck, Truck, X, Printer } from '@lucide/vue';
 import Modal from '@/Components/Modal.vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import Alert from '@/Components/UI/Alert.vue';
@@ -279,6 +279,10 @@ onMounted(() => {
                                     <Truck class="h-4 w-4" />
                                     Pengiriman
                                 </AppButton>
+                                <a v-if="order.payment_status === 'success'" :href="route('orders.invoice', order.id)" class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-neutral-border bg-white px-4 py-2 text-sm font-semibold text-neutral-text transition hover:bg-neutral-light focus:outline-none">
+                                    <Printer class="h-4 w-4" />
+                                    Cetak Kwitansi
+                                </a>
                             </div>
                         </section>
                     </aside>

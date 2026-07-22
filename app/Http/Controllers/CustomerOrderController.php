@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Services\Midtrans\MidtransPaymentGateway;
 use App\Services\Payments\PaymentAttemptService;
 use App\Support\MediaUrl;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -274,5 +275,24 @@ class CustomerOrderController extends Controller
             'vehicle_note' => $order->vehicle_note,
             'shipping_note' => $order->delivery_note,
         ];
+    }
+
+    public function invoice(Request $request, Order $order)
+    {
+        abort_unless($order->user_id === $request->user()->id, 404);
+        abort_unless($order->payment_status === 'success', 403, 'Kwitansi hanya tersedia untuk pesanan yang sudah lunas.');
+
+        $order->load([
+            'user',
+            'address',
+            'items.variant',
+            'payments' => fn ($query) => $query->where('status', 'success')->latest(),
+            'voucherSnapshot',
+            'shippingSnapshot'
+        ]);
+
+        $pdf = Pdf::loadView('invoices.receipt', compact('order'));
+        
+        return $pdf->download("Kwitansi_{$order->order_number}.pdf");
     }
 }

@@ -9,7 +9,7 @@ import Pagination from '@/Components/UI/Pagination.vue';
 import StatusBadge from '@/Components/UI/StatusBadge.vue';
 import { useAutoFilter } from '@/Composables/useAutoFilter';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Eye } from '@lucide/vue';
+import { Eye, Download } from '@lucide/vue';
 
 const props = defineProps({
     navigationGroups: { type: Array, default: () => [] },
@@ -61,8 +61,12 @@ function formatDate(value) {
     <Head title="Pesanan" />
 
     <AuthenticatedLayout :navigation-groups="navigationGroups" :breadcrumbs="breadcrumbs" title="Pesanan">
-        <div class="mb-4">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xl font-semibold text-neutral-text">Manajemen pesanan</h2>
+            <a :href="route('admin.orders.export', filters)" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-neutral-border bg-white px-4 text-sm font-semibold text-neutral-text transition hover:bg-neutral-light focus:outline-none">
+                <Download class="h-4 w-4" />
+                Export Laporan (Excel)
+            </a>
         </div>
 
         <form class="mb-4 grid min-w-0 gap-3 rounded-md border border-neutral-border bg-white p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(0,1fr))]" @submit.prevent>

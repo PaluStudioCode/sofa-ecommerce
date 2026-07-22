@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\OrdersExport;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
 
 class OrderController extends Controller
 {
@@ -308,5 +310,18 @@ class OrderController extends Controller
             'vehicle_note' => $order->vehicle_note,
             'shipping_note' => $order->delivery_note,
         ];
+    }
+
+    public function export(Request $request)
+    {
+        $filters = $request->validate([
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'order_status' => ['nullable', 'string'],
+            'payment_status' => ['nullable', 'string'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
+        ]);
+
+        return Excel::download(new OrdersExport($filters), 'Laporan_Pesanan.xlsx');
     }
 }
